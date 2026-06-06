@@ -7,6 +7,10 @@ const backButton = document.getElementById('back-button');
 const restartButton = document.getElementById('restart-button');
 const scoreElement = document.getElementById('score');
 const highScoreElement = document.getElementById('high-score');
+const gameOverSound = new Audio('sounds/gameover.wav');
+const soundNoCombo = new Audio('sounds/nocombo.MP3');
+const soundComboNormal = new Audio('sounds/5x.MP3');
+const soundComboEpic = new Audio('sounds/11x.MP3');
 
 const GRID_SIZE = 8;
 const LAYOUT_SCALE = 1.5;
@@ -58,7 +62,12 @@ const SHAPE_DEFS = [
     { blocks: [[1, 1, 0], [0, 1, 1]], colorId: 'magenta' },
     { blocks: [[0, 1, 1], [1, 1, 0]], colorId: 'magenta' },
     { blocks: [[0, 1], [1, 1], [1, 0]], colorId: 'magenta' },
-    { blocks: [[1, 0], [1, 1], [0, 1]], colorId: 'magenta' }
+    { blocks: [[1, 0], [1, 1], [0, 1]], colorId: 'magenta' },
+    // 3x3 L
+    { blocks: [[1, 0, 0], [1, 0, 0], [1,1,1]], colorId: 'purple' },
+    { blocks: [[0, 0, 1], [0, 0, 1], [1,1,1]], colorId: 'purple' },
+    { blocks: [[1, 1, 1], [1, 0, 0], [1,0,0]], colorId: 'purple' },
+    { blocks: [[1, 1, 1], [0, 0, 1], [0,0,1]], colorId: 'purple' },
 ];
 
 canvas.width = CANVAS_WIDTH;
@@ -666,6 +675,8 @@ function checkGameOver() {
 
 function handleGameOver() {
     isGameRunning = false;
+
+    gameOverSound.play().catch(e => console.log("Звук не зміг відтворитися через правила браузера:", e));
 
     if (score > highScore) {
         highScore = score;

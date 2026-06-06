@@ -275,6 +275,11 @@ let mouseY = 0;
 let dragOffsetX = 0;
 let dragOffsetY = 0;
 
+// Native canvas juice effects
+let particles = [];
+let shakeTimer = 0;
+let shakeIntensity = 0;
+
 let loopStarted = false;
 
 // DOM Events
@@ -709,6 +714,86 @@ function spawnFloatingText(points) {
     setTimeout(() => floatingText.remove(), 800);
 }
 
+function spawnLineParticles(rows, cols) {
+    const cells = [];
+    const seen = new Set();
+
+    rows.forEach(r => {
+        for (let c = 0; c < GRID_SIZE; c++) {
+            const key = `${r}:${c}`;
+            if (!seen.has(key)) {
+                seen.add(key);
+                cells.push({ r, c });
+            }
+        }
+    });
+
+    cols.forEach(c => {
+        for (let r = 0; r < GRID_SIZE; r++) {
+            const key = `${r}:${c}`;
+            if (!seen.has(key)) {
+                seen.add(key);
+                cells.push({ r, c });
+            }
+        }
+    });
+
+    cells.forEach(({ r, c }) => {
+        const cellValue = grid[r][c];
+        if (!cellValue) return;
+
+        const x = c * CELL_SIZE + CELL_SIZE / 2;
+        const y = r * CELL_SIZE + CELL_SIZE / 2;
+        const color = getThemeColor(cellValue);
+        const count = 8 + Math.floor(Math.random() * 5);
+
+        for (let i = 0; i < count; i++) {
+            particles.push({
+                x,
+                y,
+                vx: Math.random() * 6 - 3,
+                vy: -5 + Math.random() * 4,
+                size: 3 + Math.random() * 5,
+                color,
+                alpha: 1,
+                gravity: 0.2
+            });
+        }
+    });
+}
+
+function updateAndDrawParticles() {
+    if (particles.length === 0) return;
+
+    ctx.save();
+
+    for (let i = particles.length - 1; i >= 0; i--) {
+        const particle = particles[i];
+
+        particle.x += particle.vx;
+        particle.y += particle.vy;
+        particle.vy += particle.gravity;
+        particle.alpha -= 0.02;
+
+        if (particle.alpha <= 0) {
+            particles.splice(i, 1);
+            continue;
+        }
+
+        ctx.globalAlpha = particle.alpha;
+        ctx.fillStyle = particle.color;
+        ctx.fillRect(
+            particle.x - particle.size / 2,
+            particle.y - particle.size / 2,
+            particle.size,
+            particle.size
+        );
+    }
+
+    ctx.globalAlpha = 1;
+    ctx.restore();
+}
+
 function playFlashingEffect(rows, cols) {
     const gridOverlay = document.getElementById('grid-overlay');
 
@@ -832,6 +917,28 @@ function playComboSound(streak) {
     gain.connect(ctx.destination);
     osc.start();
     osc.stop(ctx.currentTime + 0.25);
+}
+
+function triggerInvalidPlacementFeedback() {
+    shakeTimer = 15;
+    shakeIntensity = 8;
+
+    if (isVibrationEnabled && navigator.vibrate) navigator.vibrate(35);
+
+    const ctx = getAudioCtx();
+    if (!ctx) return;
+
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(120, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(65, ctx.currentTime + 0.08);
+    gain.gain.setValueAtTime(0.22, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.08);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.08);
 }
 
 // ─────────────────────────────────────────────
@@ -1060,6 +1167,17 @@ function _drawLegoTile(ctx2d, x, y, size, hexColor, isObstacle) {
 function drawGame() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+    let shaken = false;
+    if (shakeTimer > 0) {
+        const offsetX = (Math.random() - 0.5) * shakeIntensity;
+        const offsetY = (Math.random() - 0.5) * shakeIntensity;
+        ctx.save();
+        ctx.translate(offsetX, offsetY);
+        shakeTimer--;
+        shakeIntensity *= 0.92;
+        shaken = true;
+    }
+
     // 1. Draw 8×8 grid
     for (let r = 0; r < GRID_SIZE; r++) {
         for (let c = 0; c < GRID_SIZE; c++) {
@@ -1076,7 +1194,7 @@ function drawGame() {
         drawShape(shape, shape.baseX, shape.baseY);
     });
 
-    // 3. Dragging shape + ghost preview
+    // 3. Ghost preview, still attached to the board shake
     if (draggingShapeIndex !== -1 && availableShapes[draggingShapeIndex]) {
         const shape = availableShapes[draggingShapeIndex];
 
@@ -1131,6 +1249,15 @@ function drawGame() {
             tempRows.forEach(r => ctx.fillRect(0, r * CELL_SIZE, GRID_SIZE * CELL_SIZE, CELL_SIZE));
             tempCols.forEach(c => ctx.fillRect(c * CELL_SIZE, 0, CELL_SIZE, GRID_SIZE * CELL_SIZE));
         }
+    }
+
+    if (shaken) ctx.restore();
+
+    updateAndDrawParticles();
+
+    // 4. Lifted dragging piece, drawn outside the shake transform
+    if (draggingShapeIndex !== -1 && availableShapes[draggingShapeIndex]) {
+        const shape = availableShapes[draggingShapeIndex];
 
         // Lifted dragging piece
         ctx.save();
@@ -1233,6 +1360,7 @@ function endDragAt(clientX, clientY) {
             }
 
             isGameRunning = false;
+            spawnLineParticles(turnResult.rowsToClear, turnResult.colsToClear);
             playFlashingEffect(turnResult.rowsToClear, turnResult.colsToClear);
 
             setTimeout(() => {
@@ -1247,6 +1375,8 @@ function endDragAt(clientX, clientY) {
             updateScore();
             finalizeTurn();
         }
+    } else {
+        triggerInvalidPlacementFeedback();
     }
 
     draggingShapeIndex = -1;

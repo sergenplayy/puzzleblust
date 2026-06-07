@@ -1,0 +1,483 @@
+/* ============================================================
+   Clean Modern theme — merged from "B _ Clean modern" design.
+   Loaded AFTER style.css so it re-skins the existing game shell
+   (menu, game screen and modals) to the warm "PuzzleBlast" look.
+   ============================================================ */
+
+:root {
+    /* Surfaces */
+    --m-cream:      #fff6ee;
+    --m-cream-2:    #ffefe2;
+    --m-card:       #ffffff;
+    --m-card-line:  #efdfd1;
+    /* Ink / text */
+    --m-ink:        #34211c;
+    --m-ink-soft:   #7c6258;
+    --m-ink-mut:    #8a6e63;
+    /* Accent */
+    --m-accent:     #ff6a45;
+    --m-accent-2:   #f2502e;
+    /* Candy block palette */
+    --c-o: #ff9f43;
+    --c-r: #ff6b5e;
+    --c-y: #ffcb45;
+    --c-b: #4fa4ff;
+    --c-g: #26d6a6;
+    --c-p: #b274f4;
+    --c-k: #ff6fb3;
+    --c-empty: #f4e7db;
+    --block-top:    rgba(255, 255, 255, 0.38);
+    --block-bot:    rgba(0, 0, 0, 0.18);
+}
+
+/* ---- Global re-skin -------------------------------------- */
+body {
+    background-color: var(--m-cream);
+    background-image:
+        radial-gradient(1200px 600px at 80% -10%, var(--m-cream-2), transparent 60%),
+        radial-gradient(900px 500px at -10% 110%, #ffe9da, transparent 55%);
+    color: var(--m-ink);
+    font-family: 'Baloo 2', 'Fredoka', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    overflow-y: auto;
+}
+
+/* ============================================================
+   LANDING PAGE  (#main-menu)
+   ============================================================ */
+#main-menu {
+    /* override the centered neon menu from style.css */
+    flex-direction: column;
+    justify-content: flex-start;
+    align-items: stretch;
+    width: 100%;
+    min-height: 100vh;
+    padding: 22px clamp(18px, 5vw, 56px) 48px;
+    box-sizing: border-box;
+    gap: 8px;
+    overflow-y: auto;
+}
+
+/* ---- Top bar -------------------------------------------- */
+#main-menu .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 18px;
+    height: 64px;
+    flex-shrink: 0;
+}
+#main-menu .brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+#main-menu .brand .mascot { width: 42px; height: 42px; flex-shrink: 0; }
+#main-menu .brand .name {
+    font-size: 24px;
+    font-weight: 800;
+    letter-spacing: -0.4px;
+    color: var(--m-ink);
+}
+#main-menu .brand .name b { color: var(--m-accent); font-weight: 800; }
+
+#main-menu .nav {
+    display: flex;
+    align-items: center;
+    gap: 34px;
+}
+#main-menu .navlink {
+    font-size: 17px;
+    font-weight: 800;
+    color: var(--m-ink-mut);
+    cursor: pointer;
+    transition: color 0.2s;
+}
+#main-menu .navlink:hover { color: var(--m-ink); }
+#main-menu .navlink.is-active { color: var(--m-ink); }
+
+#main-menu .right { display: flex; align-items: center; gap: 16px; }
+#main-menu .avatar {
+    width: 46px; height: 46px;
+    border-radius: 50%;
+    background: var(--m-ink);
+    color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px; font-weight: 800;
+    flex-shrink: 0;
+}
+
+/* ---- Buttons -------------------------------------------- */
+#main-menu .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    border: none;
+    cursor: pointer;
+    font-family: inherit;
+    font-weight: 700;
+    border-radius: 14px;
+    transition: transform 0.12s ease, box-shadow 0.2s ease, background 0.2s;
+    white-space: nowrap;
+}
+#main-menu .btn:active { transform: translateY(1px) scale(0.99); }
+
+#main-menu .btn-play {
+    background: var(--m-accent);
+    color: #fff;
+    font-size: 17px;
+    padding: 13px 26px;
+    box-shadow: 0 12px 24px -12px rgba(255, 106, 69, 0.9);
+}
+#main-menu .btn-play:hover { background: var(--m-accent-2); }
+
+#main-menu .btn-hero {
+    background: var(--m-ink);
+    color: #fff;
+    font-size: 20px;
+    padding: 18px 36px;
+    border-radius: 16px;
+    box-shadow: 0 16px 30px -16px rgba(52, 33, 28, 0.8);
+}
+#main-menu .btn-hero:hover { background: #46302a; transform: translateY(-1px); }
+
+#main-menu .btn-out {
+    background: transparent;
+    color: var(--m-ink);
+    font-size: 18px;
+    padding: 17px 30px;
+    border: 2px solid #e6d2c4;
+    border-radius: 16px;
+}
+#main-menu .btn-out:hover { background: #fff; border-color: #d8c1b1; }
+
+/* ---- Hero ----------------------------------------------- */
+#main-menu .hero {
+    flex: 1;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    align-items: center;
+    align-content: center;
+    gap: 40px;
+    margin-top: 8px;
+}
+#main-menu .copy { max-width: 564px; }
+#main-menu .tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--m-accent);
+    font-size: 14px;
+    font-weight: 800;
+    letter-spacing: 0.56px;
+    text-transform: uppercase;
+    margin-bottom: 16px;
+}
+#main-menu .tag .line {
+    width: 28px; height: 2px;
+    background: var(--m-accent);
+    border-radius: 2px;
+}
+#main-menu .hero h1 {
+    font-size: clamp(40px, 6vw, 64px);
+    line-height: 1.02;
+    font-weight: 800;
+    letter-spacing: -1.5px;
+    margin: 0 0 18px;
+    color: var(--m-ink);
+}
+#main-menu .hero h1 em {
+    font-style: normal;
+    color: var(--m-accent);
+}
+#main-menu .sub {
+    font-size: 20px;
+    font-weight: 600;
+    line-height: 1.5;
+    color: var(--m-ink-soft);
+    max-width: 440px;
+    margin: 0 0 28px;
+}
+#main-menu .cta {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 28px;
+    flex-wrap: wrap;
+}
+#main-menu .chips {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+#main-menu .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 9px;
+    background: #fff;
+    border: 1px solid var(--m-card-line);
+    border-radius: 12px;
+    padding: 11px 15px;
+    font-size: 15px;
+    font-weight: 800;
+    color: #6e564c;
+}
+#main-menu .chip .sw {
+    width: 14px; height: 14px;
+    border-radius: 5px;
+    background: var(--c-o);
+}
+#main-menu .chip:nth-child(2) .sw { background: var(--c-g); }
+#main-menu .chip:nth-child(3) .sw { background: var(--c-b); }
+
+/* ---- Board preview card --------------------------------- */
+#main-menu .stage {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+#main-menu .boardcard {
+    width: 100%;
+    max-width: 400px;
+    background: var(--m-card);
+    border: 1px solid #efdfd1;
+    border-radius: 28px;
+    padding: 26px;
+    box-sizing: border-box;
+    box-shadow: 0 50px 80px -40px rgba(120, 70, 50, 0.45);
+}
+#main-menu .bhead {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 18px;
+}
+#main-menu .bhead .t { font-weight: 800; color: var(--m-ink); }
+#main-menu .bhead .s {
+    font-weight: 800;
+    color: var(--m-accent);
+    background: #fff1ea;
+    padding: 5px 12px;
+    border-radius: 999px;
+    font-size: 14px;
+}
+#main-menu .board {
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    gap: 7px;
+    aspect-ratio: 1 / 1;
+}
+#main-menu .cell {
+    border-radius: 26%;
+    background: var(--c-empty);
+}
+#main-menu .cell.filled {
+    box-shadow:
+        inset 0 5px 0 0 var(--block-top),
+        inset 0 -5px 0 0 var(--block-bot);
+}
+#main-menu .tray {
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    gap: 18px;
+    padding-top: 20px;
+    margin-top: 18px;
+    border-top: 1px dashed #ebd9cb;
+}
+#main-menu .piece { display: grid; gap: 5px; }
+#main-menu .prow { display: flex; gap: 5px; }
+#main-menu .pcell,
+#main-menu .prow > div {
+    width: 22px;
+    height: 22px;
+    border-radius: 26%;
+}
+#main-menu .pcell {
+    box-shadow:
+        inset 0 4px 0 0 var(--block-top),
+        inset 0 -4px 0 0 var(--block-bot);
+}
+
+/* Candy colors (shared by board, tray and chips) */
+#main-menu .c-o { background: var(--c-o); }
+#main-menu .c-r { background: var(--c-r); }
+#main-menu .c-y { background: var(--c-y); }
+#main-menu .c-b { background: var(--c-b); }
+#main-menu .c-g { background: var(--c-g); }
+#main-menu .c-p { background: var(--c-p); }
+#main-menu .c-k { background: var(--c-k); }
+
+/* ============================================================
+   GAME SCREEN re-skin
+   Layout values below replace the old configureScaledLayout()
+   inline styles (LAYOUT_SCALE = 1.5 baked in: 400→600, 600→900).
+   --board-* / --score-* are set per skin by switchSkin() so the
+   board frame and score colour follow the active palette.
+   ============================================================ */
+:root {
+    --board-inner: var(--c-empty);   /* canvas grid background  */
+    --board-frame: #ffffff;          /* wrapper border / panel  */
+    --score-ink:   var(--m-ink);
+    --score-glow:  0 2px 6px rgba(120, 70, 50, 0.15);
+}
+
+#game-screen { justify-content: center; }
+
+.game-header { width: 600px; }
+
+.best-score-container {
+    color: var(--m-accent);
+    font-size: 27px;
+    font-weight: 800;
+    padding: 9px 21px;
+    gap: 6px;
+    border-radius: 33px;
+}
+
+#score {
+    font-size: 81px;
+    font-weight: 800;
+    letter-spacing: 0;
+    color: var(--score-ink);
+    text-shadow: var(--score-glow);
+}
+
+.settings-button {
+    background: #fff;
+    color: var(--m-ink);
+    border: 1px solid var(--m-card-line);
+    box-shadow: 0 6px 14px -8px rgba(120, 70, 50, 0.5);
+}
+
+/* Undo button — matches the settings button, locks when unusable */
+.undo-button {
+    background: #fff;
+    color: var(--m-ink);
+    border: 1px solid var(--m-card-line);
+    font-size: 22px;
+    cursor: pointer;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+    box-shadow: 0 6px 14px -8px rgba(120, 70, 50, 0.5);
+    transition: transform 0.12s ease, opacity 0.2s ease;
+}
+.undo-button:hover:not(:disabled) { transform: scale(1.08); }
+.undo-button:active:not(:disabled) { transform: scale(0.94); }
+.undo-button:disabled,
+.undo-button.disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+    pointer-events: none;
+    box-shadow: none;
+}
+
+.canvas-wrapper {
+    width: 600px;
+    height: 900px;
+    background-color: var(--board-inner);
+    border: 6px solid var(--board-frame);
+    box-shadow: 0 40px 70px -36px rgba(120, 70, 50, 0.5);
+}
+
+#grid-overlay {
+    top: 0;
+    left: 0;
+    width: 600px;
+    height: 600px;
+}
+
+#combo-display {
+    top: 300px;
+    font-size: 4.5rem;
+}
+
+/* Skin selector (injected into the settings modal) */
+.skin-row {
+    display: flex;
+    gap: 8px;
+    margin-top: 4px;
+}
+.skin-option-btn {
+    flex: 1;
+    padding: 10px 4px;
+    border-radius: 10px;
+    border: 2px solid var(--m-card-line);
+    background: var(--m-cream);
+    color: var(--m-ink);
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 800;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+.skin-option-btn:hover { border-color: #d8c1b1; }
+.skin-option-btn.active {
+    border-color: var(--m-accent);
+    background: #fff1ea;
+    color: var(--m-accent-2);
+}
+
+/* ============================================================
+   MODALS re-skin (settings + game over)
+   ============================================================ */
+.modal-overlay { background: rgba(52, 33, 28, 0.45); }
+
+.settings-card {
+    background: var(--m-card);
+    color: var(--m-ink);
+    box-shadow: 0 30px 60px -30px rgba(120, 70, 50, 0.6);
+}
+.settings-header { color: var(--m-ink); border-bottom-color: var(--m-card-line); }
+.close-button { color: var(--m-ink-mut); }
+
+.icon-button {
+    background: var(--m-cream);
+    color: var(--m-ink);
+    border: 1px solid var(--m-card-line);
+}
+.list-button {
+    background: var(--m-cream);
+    color: var(--m-ink);
+    border: 1px solid var(--m-card-line);
+}
+.list-button.highlight-green { background: var(--m-accent); color: #fff; border: none; }
+.theme-button { background: var(--m-ink); color: #fff; }
+
+.volume-label { color: var(--m-ink); }
+.volume-slider { background: #efdfd1; }
+.volume-slider::-webkit-slider-thumb { background: var(--m-accent); box-shadow: 0 0 6px rgba(255, 106, 69, 0.6); }
+.volume-slider::-moz-range-thumb { background: var(--m-accent); }
+
+.modal-overlay.game-over-theme { background: var(--m-cream); }
+.game-over-title { color: var(--m-ink); text-shadow: none; }
+.score-label { color: var(--m-ink-soft); }
+.score-value { color: var(--m-ink); text-shadow: none; }
+.score-label.best-label { color: var(--m-accent); }
+.score-value.best-value { color: var(--m-accent); }
+.play-again-btn {
+    background: var(--m-accent);
+    box-shadow: 0 6px 0 var(--m-accent-2), 0 12px 22px -8px rgba(255, 106, 69, 0.7);
+}
+.play-again-btn:active { box-shadow: 0 0 0 var(--m-accent-2), 0 4px 10px rgba(0, 0, 0, 0.2); }
+
+/* ---- Responsive: stack hero on narrow screens ----------- */
+@media (max-width: 880px) {
+    #main-menu .hero {
+        grid-template-columns: 1fr;
+        gap: 28px;
+        margin-top: 18px;
+    }
+    #main-menu .stage { order: -1; }
+    #main-menu .nav { display: none; }
+    #main-menu .boardcard { max-width: 340px; }
+}
+@media (max-width: 520px) {
+    #main-menu .right .btn-play { display: none; }
+    #main-menu .hero h1 { font-size: 38px; }
+    #main-menu .cta .btn { flex: 1; justify-content: center; }
+}

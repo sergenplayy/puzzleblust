@@ -27,7 +27,7 @@ function drawTile(ctx2d, x, y, size, colorId, isGhost = false) {
 
     // Empty cell
     if (hexColor === gridBg) {
-        _drawEmptyCell(ctx2d, x, y, size, gridBg);
+        _drawEmptyCell(ctx2d, x, y, size);
         return;
     }
 
@@ -49,6 +49,9 @@ function drawTile(ctx2d, x, y, size, colorId, isGhost = false) {
         case 'lego':
             _drawLegoTile(ctx2d, x, y, size, hexColor, hexColor === obstacleHex);
             break;
+        case 'wooden':
+            _drawWoodenTile(ctx2d, x, y, size, hexColor, hexColor === obstacleHex);
+            break;
         case 'default':
         default:
             _drawDefaultTile(ctx2d, x, y, size, hexColor, hexColor === obstacleHex);
@@ -56,14 +59,27 @@ function drawTile(ctx2d, x, y, size, colorId, isGhost = false) {
     }
 }
 
-function _drawEmptyCell(ctx2d, x, y, size, bgColor) {
-    ctx2d.fillStyle = bgColor;
+// Empty-cell look is per-skin (Task 1):
+//  • Light  → flat pastel-gray fill, no outline
+//  • Dark   → graphite fill + thin neon border
+//  • Retro  → recessed matte socket + subtle inset edge
+// The 1px inset leaves the board (gridBg) showing through as a soft grid line.
+function _drawEmptyCell(ctx2d, x, y, size) {
+    const fill = getThemeColor('emptyCell');
+    const border = getThemeColor('emptyBorder');
+
+    ctx2d.fillStyle = fill;
     ctx2d.beginPath();
-    ctx2d.roundRect(x, y, size, size, 4);
+    ctx2d.roundRect(x + 1, y + 1, size - 2, size - 2, 8);
     ctx2d.fill();
-    ctx2d.strokeStyle = 'rgba(255, 255, 255, 0.03)';
-    ctx2d.lineWidth = 1;
-    ctx2d.stroke();
+
+    if (border && border !== 'none') {
+        ctx2d.strokeStyle = border;
+        ctx2d.lineWidth = 1.5;
+        ctx2d.beginPath();
+        ctx2d.roundRect(x + 1.75, y + 1.75, size - 3.5, size - 3.5, 7);
+        ctx2d.stroke();
+    }
 }
 
 // ── DEFAULT: 3D truncated-pyramid bevel ──────────────────────────────────────
@@ -225,6 +241,61 @@ function _drawLegoTile(ctx2d, x, y, size, hexColor, isObstacle) {
     ctx2d.stroke();
 }
 
+// ── WOODEN: beech-style block — soft bevel + low-alpha wood grain ─────────────
+function _drawWoodenTile(ctx2d, x, y, size, hexColor, isObstacle) {
+    const r = Math.max(3, size * 0.1);
+
+    // Base wood face
+    ctx2d.fillStyle = hexColor;
+    ctx2d.beginPath();
+    ctx2d.roundRect(x + 1, y + 1, size - 2, size - 2, r);
+    ctx2d.fill();
+
+    // Clip to the tile so grain + bevel stay inside the rounded square
+    ctx2d.save();
+    ctx2d.beginPath();
+    ctx2d.roundRect(x + 1, y + 1, size - 2, size - 2, r);
+    ctx2d.clip();
+
+    // Wood grain — a few gently wavy vertical strokes
+    ctx2d.strokeStyle = 'rgba(70, 45, 25, 0.14)';
+    ctx2d.lineWidth = Math.max(1, size * 0.018);
+    const lines = 4;
+    for (let i = 1; i <= lines; i++) {
+        const gx = x + (size * i) / (lines + 1);
+        ctx2d.beginPath();
+        ctx2d.moveTo(gx, y + 2);
+        ctx2d.quadraticCurveTo(gx + size * 0.06, y + size * 0.5, gx, y + size - 2);
+        ctx2d.stroke();
+    }
+    // A couple of lighter highlight grains
+    ctx2d.strokeStyle = 'rgba(255, 245, 225, 0.16)';
+    ctx2d.lineWidth = Math.max(1, size * 0.012);
+    for (let i = 1; i <= 2; i++) {
+        const gx = x + (size * (i + 0.5)) / (lines + 1);
+        ctx2d.beginPath();
+        ctx2d.moveTo(gx, y + 2);
+        ctx2d.quadraticCurveTo(gx - size * 0.05, y + size * 0.5, gx, y + size - 2);
+        ctx2d.stroke();
+    }
+
+    if (!isObstacle) {
+        // Soft top highlight + bottom shadow for a carved-block feel
+        ctx2d.fillStyle = 'rgba(255, 245, 225, 0.28)';
+        ctx2d.fillRect(x + 1, y + 1, size - 2, Math.max(2, size * 0.12));
+        ctx2d.fillStyle = 'rgba(60, 38, 20, 0.22)';
+        ctx2d.fillRect(x + 1, y + size - 1 - Math.max(2, size * 0.12), size - 2, Math.max(2, size * 0.12));
+    }
+    ctx2d.restore();
+
+    // Crisp inner edge
+    ctx2d.strokeStyle = 'rgba(60, 38, 20, 0.25)';
+    ctx2d.lineWidth = 1;
+    ctx2d.beginPath();
+    ctx2d.roundRect(x + 1.5, y + 1.5, size - 3, size - 3, r - 1);
+    ctx2d.stroke();
+}
+
 // ─────────────────────────────────────────────
 // MAIN DRAW FUNCTION
 // ─────────────────────────────────────────────
@@ -380,6 +451,39 @@ function updateAndDrawParticles() {
 }
 
 function gameLoop() {
-    drawGame();
+    // Only redraw while the game screen is on-screen — avoids burning frames
+    // drawing a hidden canvas on the menu / behind modals.
+    if (gameScreen.classList.contains('active')) {
+        drawGame();
+    }
     requestAnimationFrame(gameLoop);
 }
+
+// Scale the header + board down to fit small screens (fixes mobile overflow).
+// Input mapping stays correct because getMousePos() divides by the canvas's
+// scaled getBoundingClientRect width, and the overlay/flash effects live inside
+// the scaled subtree.
+function fitBoard() {
+    const boardFit = document.getElementById('board-fit');
+    if (!boardFit) return;
+
+    // Measure natural (unscaled) size; bail if the screen is hidden (size 0).
+    boardFit.style.transform = 'none';
+    boardFit.style.marginBottom = '0';
+    const naturalW = boardFit.offsetWidth;
+    const naturalH = boardFit.offsetHeight;
+    if (naturalW === 0 || naturalH === 0) return;
+
+    const pad = parseFloat(getComputedStyle(gameScreen).paddingLeft) || 18;
+    const topbar = document.querySelector('#game-screen .topbar');
+    const topbarH = topbar ? topbar.offsetHeight : 0;
+    const availW = window.innerWidth - pad * 2;
+    const availH = window.innerHeight - topbarH - 40; // breathing room
+
+    const scale = Math.min(1, availW / naturalW, availH / naturalH);
+    boardFit.style.transform = `scale(${scale})`;
+    // transform doesn't shrink the layout box — pull the page back up to match.
+    boardFit.style.marginBottom = `${-naturalH * (1 - scale)}px`;
+}
+
+window.addEventListener('resize', fitBoard);

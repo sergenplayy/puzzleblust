@@ -8,6 +8,7 @@ function startGame(forceRestart = false) {
     isGameRunning = true;
     document.getElementById('combo-display').classList.remove('pop');
 
+    fitBoard();
     refreshBgm();
 
     if (!loopStarted) {
@@ -156,7 +157,25 @@ function refillShapes() {
 }
 
 function updateScore() {
-    scoreElement.textContent = score;
+    scoreElement.textContent = formatScore(score);
+    // Live high-score: reflect a new best immediately (don't wait for game-over)
+    if (score > highScore) {
+        highScore = score;
+        localStorage.setItem('block_blast_highscore', highScore);
+        highScoreElement.textContent = formatScore(highScore);
+    }
+}
+
+// Count a number up to a target over ~600ms (used on the game-over modal)
+function animateCountUp(el, target, duration = 600) {
+    const start = performance.now();
+    function tick(now) {
+        const t = Math.min(1, (now - start) / duration);
+        const eased = 1 - Math.pow(1 - t, 3);
+        el.textContent = formatScore(Math.round(target * eased));
+        if (t < 1) requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
 }
 
 function resetCombo() {
@@ -254,14 +273,15 @@ function handleGameOver() {
     if (score > highScore) {
         highScore = score;
         localStorage.setItem('block_blast_highscore', highScore);
-        highScoreElement.textContent = highScore;
+        highScoreElement.textContent = formatScore(highScore);
     }
 
     const modal = document.getElementById('game-over-modal');
-    document.getElementById('final-score').textContent = score;
-    document.getElementById('modal-best-score').textContent = highScore;
+    document.getElementById('modal-best-score').textContent = formatScore(highScore);
     modal.style.display = 'flex';
     setTimeout(() => modal.classList.add('active'), 10);
+    // Count the final score up for a small payoff moment
+    animateCountUp(document.getElementById('final-score'), score);
 }
 
 function finalizeTurn() {

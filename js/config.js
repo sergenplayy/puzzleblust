@@ -71,3 +71,8 @@ const SHAPE_DEFS = [
 
 canvas.width = CANVAS_WIDTH;
 canvas.height = CANVAS_HEIGHT;
+
+// Thousands-separated score display (e.g. 1250000 -> "1,250,000")
+function formatScore(n) {
+    return Number(n || 0).toLocaleString('en-US');
+}

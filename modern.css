@@ -5,16 +5,16 @@
    ============================================================ */
 
 :root {
-    /* Surfaces */
-    --m-cream:      #fff6ee;
-    --m-cream-2:    #ffefe2;
+    /* Surfaces — soft-blue Light theme (orange accent kept) */
+    --m-cream:      #eaf1fb;   /* page base (still the "light" surface var) */
+    --m-cream-2:    #dfeaf9;
     --m-card:       #ffffff;
-    --m-card-line:  #efdfd1;
-    /* Ink / text */
-    --m-ink:        #34211c;
-    --m-ink-soft:   #7c6258;
-    --m-ink-mut:    #8a6e63;
-    /* Accent */
+    --m-card-line:  #d9e3f1;
+    /* Ink / text — cool slate-navy */
+    --m-ink:        #21314f;
+    --m-ink-soft:   #5a6b86;
+    --m-ink-mut:    #7689a3;
+    /* Accent (unchanged) */
     --m-accent:     #ff6a45;
     --m-accent-2:   #f2502e;
     /* Candy block palette */
@@ -25,7 +25,7 @@
     --c-g: #26d6a6;
     --c-p: #b274f4;
     --c-k: #ff6fb3;
-    --c-empty: #f4e7db;
+    --c-empty: #e9eff8;
     --block-top:    rgba(255, 255, 255, 0.38);
     --block-bot:    rgba(0, 0, 0, 0.18);
 }
@@ -35,7 +35,7 @@ body {
     background-color: var(--m-cream);
     background-image:
         radial-gradient(1200px 600px at 80% -10%, var(--m-cream-2), transparent 60%),
-        radial-gradient(900px 500px at -10% 110%, #ffe9da, transparent 55%);
+        radial-gradient(900px 500px at -10% 110%, #dce9fb, transparent 55%);
     color: var(--m-ink);
     font-family: 'Baloo 2', 'Fredoka', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
     overflow-y: auto;
@@ -57,15 +57,45 @@ body {
     overflow-y: auto;
 }
 
-/* ---- Top bar -------------------------------------------- */
-#main-menu .topbar {
+/* ---- Centered content container -------------------------
+   Keep the hero clustered as one interface and centred on
+   ultra-wide monitors instead of stretching to the edges.   */
+#main-menu .hero {
+    width: 100%;
+    max-width: 1180px;     /* ≈ Tailwind max-w-7xl, centred */
+    margin-inline: auto;
+}
+
+/* ---- Top bar as a real, full-bleed band -----------------
+   .topbar bleeds to the screen edges (cancels page padding) and
+   carries the surface/border/shadow; .topbar-inner holds the
+   centred, max-width row of content. Shared by menu + game.    */
+#main-menu  { --page-pad: clamp(18px, 5vw, 56px); }
+.topbar {
+    align-self: stretch;
+    flex-shrink: 0;
+    margin-inline: calc(-1 * var(--page-pad, 24px));
+    padding: 9px var(--page-pad, 24px);
+    background: var(--bar-bg, rgba(255, 255, 255, 0.72));
+    border-bottom: 1px solid var(--bar-line, rgba(40, 60, 100, 0.12));
+    box-shadow: 0 8px 22px -16px rgba(40, 60, 100, 0.55);
+    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(10px);
+    position: sticky;
+    top: 0;
+    z-index: 20;
+}
+.topbar-inner {
+    max-width: 1180px;
+    margin-inline: auto;
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 18px;
     height: 64px;
-    flex-shrink: 0;
 }
+.brand { cursor: pointer; }
+.brand:focus-visible { outline: 2px solid var(--m-accent); outline-offset: 4px; border-radius: 8px; }
 #main-menu .brand {
     display: flex;
     align-items: center;
@@ -321,17 +351,176 @@ body {
     --score-glow:  0 2px 6px rgba(120, 70, 50, 0.15);
 }
 
-#game-screen { justify-content: center; }
+/* In-game screen: nav header pinned at the top, board centred below */
+#game-screen {
+    --page-pad: clamp(18px, 5vw, 56px);
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    min-height: 100vh;
+    box-sizing: border-box;
+    padding: 22px var(--page-pad) 32px;
+}
 
-.game-header { width: 600px; }
+.play-area {
+    flex: 1;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Board + header are scaled together by fitBoard() to fit small screens.
+   transform-origin keeps it centred; JS also compensates the layout height. */
+#board-fit {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+    transform-origin: top center;
+    will-change: transform;
+}
+
+/* In-game header — same look as the menu top bar, minus the Play-now CTA.
+   Layout (band + centred inner row) comes from .topbar / .topbar-inner. */
+.game-topbar .brand { display: flex; align-items: center; gap: 12px; }
+.game-topbar .mascot { width: 42px; height: 42px; flex-shrink: 0; }
+.game-topbar .name {
+    font-size: 24px;
+    font-weight: 800;
+    letter-spacing: -0.4px;
+    color: var(--m-ink);
+}
+.game-topbar .name b { color: var(--m-accent); font-weight: 800; }
+.game-topbar .nav { display: flex; align-items: center; gap: 34px; }
+.game-topbar .navlink {
+    font-size: 17px;
+    font-weight: 800;
+    color: var(--m-ink-mut);
+    cursor: pointer;
+    transition: color 0.2s;
+}
+.game-topbar .navlink:hover { color: var(--m-ink); }
+.game-topbar .navlink.is-active { color: var(--m-ink); }
+.game-topbar .right { display: flex; align-items: center; gap: 16px; }
+.game-topbar .avatar {
+    width: 46px; height: 46px;
+    border-radius: 50%;
+    background: var(--m-ink);
+    color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px; font-weight: 800;
+    flex-shrink: 0;
+}
+
+/* ---- Per-skin in-game background (game screen only) -------
+   CSS recreations of the reference textures, kept tasteful/dimmed.
+   The landing/menu is unchanged — only #game-screen follows the skin. */
+#game-screen { position: relative; }
+#game-screen .play-area { position: relative; z-index: 1; }  /* board above bg layers */
+
+/* LIGHT — soft light-blue */
+body.theme-default #game-screen {
+    background: linear-gradient(180deg, #dbe9fb, #c3d8f3);
+}
+
+/* NEON — near-black base + dimmed rainbow diagonal lines (masked overlay) */
+body.theme-neon #game-screen {
+    background: radial-gradient(1200px 820px at 50% -10%, #141b2e, #0a0a0f 72%);
+}
+body.theme-neon #game-screen::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    background: linear-gradient(160deg, #ff2bd6, #ff7a00, #ffe600, #39ff14, #00e5ff, #2b6bff);
+    -webkit-mask: repeating-linear-gradient(135deg, transparent 0 58px, #000 58px 64px);
+    mask: repeating-linear-gradient(135deg, transparent 0 58px, #000 58px 64px);
+    opacity: 0.4;
+}
+
+/* RETRO — lego stud baseplate (blue), dimmed */
+body.theme-lego #game-screen {
+    background-color: #2f6fb0;
+    background-image:
+        radial-gradient(circle at 50% 40%, rgba(255, 255, 255, 0.30) 0 28%, transparent 31%),
+        radial-gradient(circle at 50% 60%, rgba(0, 0, 0, 0.20) 0 31%, transparent 34%),
+        linear-gradient(180deg, rgba(0, 0, 0, 0.20), rgba(0, 0, 0, 0.34));
+    background-size: 50px 50px, 50px 50px, 100% 100%;
+}
+
+/* WOODEN — horizontal planks + faint grain */
+body.theme-wooden #game-screen {
+    background-color: #c2986a;
+    background-image:
+        repeating-linear-gradient(0deg, rgba(60, 40, 20, 0) 0 80px, rgba(60, 40, 20, 0.45) 80px 84px),
+        repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.04) 0 2px, rgba(0, 0, 0, 0.04) 2px 5px),
+        linear-gradient(180deg, #c8a376, #b6885a);
+}
+
+/* Per-skin in-game top-bar surface (menu bar stays light) */
+body.theme-neon #game-screen .topbar,
+body.theme-lego #game-screen .topbar {
+    background: rgba(13, 20, 34, 0.55);
+    border-bottom-color: rgba(255, 255, 255, 0.08);
+}
+body.theme-wooden #game-screen .topbar {
+    background: rgba(245, 236, 222, 0.72);
+    border-bottom-color: rgba(60, 40, 20, 0.14);
+}
+
+/* Light-up the in-game header text on dark skins for legibility */
+body.theme-neon .game-topbar .name,
+body.theme-lego .game-topbar .name { color: #eef3f8; }
+body.theme-neon .game-topbar .navlink,
+body.theme-lego .game-topbar .navlink { color: #93a6ba; }
+body.theme-neon .game-topbar .navlink:hover,
+body.theme-neon .game-topbar .navlink.is-active,
+body.theme-lego .game-topbar .navlink:hover,
+body.theme-lego .game-topbar .navlink.is-active { color: #eef3f8; }
+body.theme-neon .game-topbar .avatar,
+body.theme-lego .game-topbar .avatar { background: var(--m-accent); }
+
+/* Wooden skin: warm brown header text on the light wood background */
+body.theme-wooden .game-topbar .name { color: #3a2618; }
+body.theme-wooden .game-topbar .navlink { color: #7a5c41; }
+body.theme-wooden .game-topbar .navlink:hover,
+body.theme-wooden .game-topbar .navlink.is-active { color: #3a2618; }
+body.theme-wooden .game-topbar .avatar { background: #7a5a3a; }
+
+/* Header stacks: high score on its own line, then undo / score / settings */
+.game-header {
+    width: 600px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.score-topline {
+    display: flex;
+    justify-content: flex-start;  /* sit above the Undo button */
+    width: 100%;                  /* override .game-header align-items:center shrink */
+    min-height: 32px;
+    padding-left: 4px;
+}
+.score-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+}
 
 .best-score-container {
     color: var(--m-accent);
-    font-size: 27px;
+    font-size: 26px;
     font-weight: 800;
-    padding: 9px 21px;
+    padding: 6px 16px;
     gap: 6px;
-    border-radius: 33px;
+    border-radius: 24px;
+    /* Drop the legacy -170px lift / 1.2 scale — it now sits on its own row. */
+    margin-top: 0;
+    transform: none;
 }
 
 #score {
@@ -340,7 +529,9 @@ body {
     letter-spacing: 0;
     color: var(--score-ink);
     text-shadow: var(--score-glow);
+    white-space: nowrap;
 }
+.best-score-container { white-space: nowrap; }
 
 .settings-button {
     background: #fff;
@@ -396,31 +587,51 @@ body {
     font-size: 4.5rem;
 }
 
-/* Skin selector (injected into the settings modal) */
-.skin-row {
+/* Skin picker — vertical stack of full-width row buttons (#skin-modal) */
+.skin-grid {
     display: flex;
-    gap: 8px;
+    flex-direction: column;
+    gap: 10px;
     margin-top: 4px;
 }
-.skin-option-btn {
-    flex: 1;
-    padding: 10px 4px;
-    border-radius: 10px;
+.skin-option-btn {                 /* one skin row button */
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 16px;
+    border-radius: 16px;
     border: 2px solid var(--m-card-line);
     background: var(--m-cream);
     color: var(--m-ink);
     font-family: inherit;
-    font-size: 13px;
+    font-size: 17px;
     font-weight: 800;
     cursor: pointer;
-    transition: all 0.2s;
+    transition: border-color 0.18s ease, background 0.18s ease, transform 0.12s ease;
 }
-.skin-option-btn:hover { border-color: #d8c1b1; }
+.skin-option-btn:hover { border-color: var(--m-accent); transform: translateY(-1px); }
 .skin-option-btn.active {
     border-color: var(--m-accent);
     background: #fff1ea;
     color: var(--m-accent-2);
+    box-shadow: 0 0 0 3px rgba(255, 106, 69, 0.15);
 }
+.skin-card-name { order: -1; font-size: 17px; font-weight: 800; }
+/* compact 2×2 swatch chip on the right, tinted with the skin's board colour */
+.skin-card-preview {
+    display: grid;
+    grid-template-columns: repeat(2, 14px);
+    grid-auto-rows: 14px;
+    gap: 4px;
+    padding: 6px;
+    border-radius: 10px;
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08);
+    flex-shrink: 0;
+}
+.skin-sw { border-radius: 4px; width: 14px; height: 14px; }
+.settings-header .header-spacer { width: 28px; flex-shrink: 0; }
 
 /* ============================================================
    MODALS re-skin (settings + game over)
@@ -473,7 +684,8 @@ body {
         margin-top: 18px;
     }
     #main-menu .stage { order: -1; }
-    #main-menu .nav { display: none; }
+    #main-menu .nav,
+    .game-topbar .nav { display: none; }
     #main-menu .boardcard { max-width: 340px; }
 }
 @media (max-width: 520px) {

@@ -44,7 +44,7 @@ let gameVolume = localStorage.getItem('gameVolume') !== null
 
 // Feature D: High Score Initialization
 let highScore = parseInt(localStorage.getItem('block_blast_highscore')) || 0;
-highScoreElement.textContent = highScore;
+highScoreElement.textContent = formatScore(highScore);
 
 // Drag and drop state
 let draggingShapeIndex = -1;

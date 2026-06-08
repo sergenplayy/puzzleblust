@@ -4,6 +4,7 @@
 let currentSkin = localStorage.getItem('selectedSkin') || 'default';
 
 const SKIN_PALETTES = {
+    // LIGHT theme — warm cream board, flat pastel-gray empty cells, no outline
     default: {
         green:    '#26d6a6',
         blue:     '#4fa4ff',
@@ -13,11 +14,14 @@ const SKIN_PALETTES = {
         cyan:     '#3ec9dd',
         magenta:  '#ff6fb3',
         red:      '#ff6b5e',
-        obstacle: '#b8a594',
-        gridBg:   '#f4e7db',
-        panelBg:  '#ffffff',
-        separator:'rgba(52, 33, 28, 0.08)'
+        obstacle: '#9fb0c6',
+        gridBg:   '#dfe9f7',        // soft blue board / page background
+        panelBg:  '#ffffff',        // wrapper frame
+        emptyCell:'#e9eff8',        // flat light blue-gray empty cell
+        emptyBorder: 'none',        // no bright outline
+        separator:'rgba(40, 60, 100, 0.08)'
     },
+    // DARK theme — deep dark-blue/graphite board, thin neon-bordered empty cells
     neon: {
         green:    '#39ff14',
         blue:     '#00f3ff',
@@ -28,10 +32,13 @@ const SKIN_PALETTES = {
         magenta:  '#ff00d4',
         red:      '#ff0055',
         obstacle: '#2a3a44',
-        gridBg:   '#121e26',
-        panelBg:  '#0b0c10',
+        gridBg:   '#0f1a2b',        // deep dark-blue / graphite board
+        panelBg:  '#0a1120',
+        emptyCell:'#16243a',        // slightly lifted graphite
+        emptyBorder: 'rgba(70, 210, 240, 0.20)', // thin neon edge
         separator:'rgba(69, 162, 158, 0.4)'
     },
+    // RETRO theme — dark matte "device", recessed empty sockets, brick blocks
     lego: {
         green:    '#4B9F3F',
         blue:     '#0050A0',
@@ -42,18 +49,38 @@ const SKIN_PALETTES = {
         magenta:  '#D3359D',
         red:      '#E60012',
         obstacle: '#5a6e7a',
-        gridBg:   '#1e2d3d',
-        panelBg:  '#151f2a',
+        gridBg:   '#202a33',        // dark matte device body
+        panelBg:  '#161d24',
+        emptyCell:'#2b3742',        // recessed matte socket
+        emptyBorder: 'rgba(0, 0, 0, 0.35)', // subtle inset edge
         separator:'rgba(255, 255, 255, 0.12)'
+    },
+    // WOODEN theme — beech-style blocks; 8 distinct wood/stain tones on a wood board
+    wooden: {
+        green:    '#cdb59a',        // ash
+        blue:     '#9a6740',        // walnut
+        yellow:   '#e7cda3',        // maple
+        orange:   '#e0a85f',        // honey
+        purple:   '#a86a43',        // chestnut
+        cyan:     '#d8b483',        // beech
+        magenta:  '#b5654d',        // cherry
+        red:      '#c69b63',        // oak
+        obstacle: '#5e4631',        // dark walnut
+        gridBg:   '#b58c63',        // medium wood board (blocks pop)
+        panelBg:  '#7a5a3a',        // dark wood frame
+        emptyCell:'#a47d56',        // slightly darker recessed slot
+        emptyBorder: 'rgba(0, 0, 0, 0.15)',
+        separator:'rgba(0, 0, 0, 0.18)'
     }
 };
 
 // Per-skin styling for the surrounding chrome (board frame + score text).
 // Keeps the CSS board/score in sync with the canvas palette above.
 const SKIN_CHROME = {
-    default: { scoreInk: '#34211c', scoreGlow: '0 2px 6px rgba(120,70,50,0.15)' },
+    default: { scoreInk: '#21314f', scoreGlow: '0 2px 6px rgba(40,60,100,0.18)' },
     neon:    { scoreInk: '#ffffff', scoreGlow: '0 0 14px rgba(102,252,241,0.55)' },
-    lego:    { scoreInk: '#ffffff', scoreGlow: '0 2px 6px rgba(0,0,0,0.45)' }
+    lego:    { scoreInk: '#ffffff', scoreGlow: '0 2px 6px rgba(0,0,0,0.45)' },
+    wooden:  { scoreInk: '#3a2618', scoreGlow: '0 2px 6px rgba(60,40,20,0.35)' }
 };
 
 function getThemeColor(colorId) {
@@ -93,9 +120,11 @@ function hslToHex(h, s, l) {
 
 function getRandomBlockColorId() {
     const themeColorIds = ['green', 'blue', 'yellow', 'orange', 'purple', 'cyan', 'magenta', 'red'];
-    return Math.random() < 0.75
-        ? themeColorIds[Math.floor(Math.random() * themeColorIds.length)]
-        : randomHexColor();
+    // Wooden skin must stay all-wood — never inject a random off-palette hex.
+    const allowRandom = currentSkin !== 'wooden';
+    return (allowRandom && Math.random() >= 0.75)
+        ? randomHexColor()
+        : themeColorIds[Math.floor(Math.random() * themeColorIds.length)];
 }
 
 function cloneShapeWithRandomColor(def) {
@@ -132,7 +161,7 @@ function switchSkin(skinName) {
     localStorage.setItem('selectedSkin', skinName);
 
     // Body class kept for any CSS that keys off the active skin
-    document.body.classList.remove('theme-default', 'theme-neon', 'theme-lego');
+    document.body.classList.remove('theme-default', 'theme-neon', 'theme-lego', 'theme-wooden');
     document.body.classList.add('theme-' + skinName);
 
     // Drive the board frame + score colour from the palette

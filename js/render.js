@@ -1,6 +1,3 @@
-// ─────────────────────────────────────────────
-// RENDER — geometry helpers, per-skin tile renderers, frame draw
-// ─────────────────────────────────────────────
 function getShapePixelBounds(shape, cellSize) {
     const widthInCells = Math.max(...shape.blocks.map(row => row.length));
     const heightInCells = shape.blocks.length;
@@ -16,296 +13,7 @@ function getPreviewCellSize(shape, slotWidth = canvas.width / 3) {
     return Math.min(SHAPE_PREVIEW_CELL_SIZE, maxPreviewWidth / widthInCells);
 }
 
-/**
- * Master tile draw dispatcher. Resolves colorId → hex, then routes to
- * the correct skin renderer.
- */
-function drawTile(ctx2d, x, y, size, colorId, isGhost = false) {
-    const hexColor = getThemeColor(colorId);
-    const gridBg   = getThemeColor('gridBg');
-    const obstacleHex = getThemeColor('obstacle');
-
-    // Empty cell
-    if (hexColor === gridBg) {
-        _drawEmptyCell(ctx2d, x, y, size);
-        return;
-    }
-
-    // Ghost/preview
-    if (isGhost) {
-        ctx2d.globalAlpha = 0.35;
-        ctx2d.fillStyle = hexColor;
-        ctx2d.beginPath();
-        ctx2d.roundRect(x + 1, y + 1, size - 2, size - 2, 4);
-        ctx2d.fill();
-        ctx2d.globalAlpha = 1.0;
-        return;
-    }
-
-    switch (currentSkin) {
-        case 'neon':
-            _drawNeonTile(ctx2d, x, y, size, hexColor);
-            break;
-        case 'lego':
-            _drawLegoTile(ctx2d, x, y, size, hexColor, hexColor === obstacleHex);
-            break;
-        case 'wooden':
-            _drawWoodenTile(ctx2d, x, y, size, hexColor, hexColor === obstacleHex);
-            break;
-        case 'minecraft':
-            _drawMinecraftTile(ctx2d, x, y, size, colorId, hexColor, hexColor === obstacleHex);
-            break;
-        case 'default':
-        default:
-            _drawDefaultTile(ctx2d, x, y, size, hexColor, hexColor === obstacleHex);
-            break;
-    }
-}
-
-// Empty-cell look is per-skin (Task 1):
-//  • Light  → flat pastel-gray fill, no outline
-//  • Dark   → graphite fill + thin neon border
-//  • Retro  → recessed matte socket + subtle inset edge
-// The 1px inset leaves the board (gridBg) showing through as a soft grid line.
-function _drawEmptyCell(ctx2d, x, y, size) {
-    const fill = getThemeColor('emptyCell');
-    const border = getThemeColor('emptyBorder');
-
-    // A 'transparent'/'none' fill lets the in-game background show through the
-    // board (used by the Lego skin so the lego photo is fully visible).
-    if (fill && fill !== 'transparent' && fill !== 'none') {
-        ctx2d.fillStyle = fill;
-        ctx2d.beginPath();
-        ctx2d.roundRect(x + 1, y + 1, size - 2, size - 2, 8);
-        ctx2d.fill();
-    }
-
-    if (border && border !== 'none') {
-        ctx2d.strokeStyle = border;
-        ctx2d.lineWidth = 1.5;
-        ctx2d.beginPath();
-        ctx2d.roundRect(x + 1.75, y + 1.75, size - 3.5, size - 3.5, 7);
-        ctx2d.stroke();
-    }
-}
-
-// ── DEFAULT: 3D truncated-pyramid bevel ──────────────────────────────────────
-function _drawDefaultTile(ctx2d, x, y, size, hexColor, isObstacle) {
-    if (isObstacle) {
-        ctx2d.fillStyle = hexColor;
-        ctx2d.beginPath();
-        ctx2d.roundRect(x + 1, y + 1, size - 2, size - 2, 4);
-        ctx2d.fill();
-        return;
-    }
-
-    // Base
-    ctx2d.fillStyle = hexColor;
-    ctx2d.beginPath();
-    ctx2d.roundRect(x, y, size, size, 4);
-    ctx2d.fill();
-
-    // Clipped 3D bevel
-    ctx2d.save();
-    ctx2d.beginPath();
-    ctx2d.roundRect(x, y, size, size, 4);
-    ctx2d.clip();
-
-    const offset = Math.max(2, size * 0.12);
-
-    ctx2d.fillStyle = 'rgba(255, 255, 255, 0.4)';
-    ctx2d.beginPath();
-    ctx2d.moveTo(x, y);
-    ctx2d.lineTo(x + size, y);
-    ctx2d.lineTo(x + size - offset, y + offset);
-    ctx2d.lineTo(x + offset, y + offset);
-    ctx2d.fill();
-
-    ctx2d.fillStyle = 'rgba(255, 255, 255, 0.2)';
-    ctx2d.beginPath();
-    ctx2d.moveTo(x, y);
-    ctx2d.lineTo(x + offset, y + offset);
-    ctx2d.lineTo(x + offset, y + size - offset);
-    ctx2d.lineTo(x, y + size);
-    ctx2d.fill();
-
-    ctx2d.fillStyle = 'rgba(0, 0, 0, 0.1)';
-    ctx2d.beginPath();
-    ctx2d.moveTo(x + size, y);
-    ctx2d.lineTo(x + size, y + size);
-    ctx2d.lineTo(x + size - offset, y + size - offset);
-    ctx2d.lineTo(x + size - offset, y + offset);
-    ctx2d.fill();
-
-    ctx2d.fillStyle = 'rgba(0, 0, 0, 0.35)';
-    ctx2d.beginPath();
-    ctx2d.moveTo(x, y + size);
-    ctx2d.lineTo(x + offset, y + size - offset);
-    ctx2d.lineTo(x + size - offset, y + size - offset);
-    ctx2d.lineTo(x + size, y + size);
-    ctx2d.fill();
-
-    ctx2d.fillStyle = hexColor;
-    ctx2d.beginPath();
-    ctx2d.roundRect(x + offset, y + offset, size - offset * 2, size - offset * 2, Math.max(1, 4 - offset / 2));
-    ctx2d.fill();
-
-    ctx2d.restore();
-}
-
-// ── NEON: glowing rounded rect ───────────────────────────────────────────────
-function _drawNeonTile(ctx2d, x, y, size, hexColor) {
-    ctx2d.save();
-
-    // Deep atmospheric glow
-    ctx2d.shadowColor = hexColor;
-    ctx2d.shadowBlur = 14;
-
-    // Core sleek translucent fill
-    ctx2d.fillStyle = 'rgba(255, 255, 255, 0.08)';
-    ctx2d.beginPath();
-    ctx2d.roundRect(x + 2, y + 2, size - 4, size - 4, 6);
-    ctx2d.fill();
-
-    // Intense neon stroke line
-    ctx2d.shadowBlur = 8;
-    ctx2d.strokeStyle = hexColor;
-    ctx2d.lineWidth = 2.5;
-    ctx2d.beginPath();
-    ctx2d.roundRect(x + 2, y + 2, size - 4, size - 4, 6);
-    ctx2d.stroke();
-
-    // Inner bright electric highlight core
-    ctx2d.shadowBlur = 0;
-    ctx2d.strokeStyle = 'rgba(255, 255, 255, 0.6)';
-    ctx2d.lineWidth = 1;
-    ctx2d.beginPath();
-    ctx2d.roundRect(x + 3.5, y + 3.5, size - 7, size - 7, 5);
-    ctx2d.stroke();
-
-    ctx2d.restore();
-}
-
-// ── LEGO: flat square + centered stud circle ─────────────────────────────────
-function _drawLegoTile(ctx2d, x, y, size, hexColor, isObstacle) {
-    const radius = 3;
-
-    // Shadow layer (gives a slight raised feel)
-    ctx2d.fillStyle = 'rgba(0,0,0,0.28)';
-    ctx2d.beginPath();
-    ctx2d.roundRect(x + 1, y + 2, size - 2, size - 2, radius);
-    ctx2d.fill();
-
-    // Face plate
-    ctx2d.fillStyle = hexColor;
-    ctx2d.beginPath();
-    ctx2d.roundRect(x, y, size - 1, size - 1, radius);
-    ctx2d.fill();
-
-    // Subtle top-left highlight edge
-    ctx2d.strokeStyle = 'rgba(255,255,255,0.22)';
-    ctx2d.lineWidth = 1.5;
-    ctx2d.beginPath();
-    ctx2d.moveTo(x + radius, y + 1);
-    ctx2d.lineTo(x + size - 2, y + 1);
-    ctx2d.stroke();
-    ctx2d.beginPath();
-    ctx2d.moveTo(x + 1, y + radius);
-    ctx2d.lineTo(x + 1, y + size - 2);
-    ctx2d.stroke();
-
-    if (isObstacle) return; // Obstacles have no stud
-
-    // Stud (centered circle)
-    const studRadius = size * 0.18;
-    const cx = x + size / 2 - 0.5;
-    const cy = y + size / 2 - 0.5;
-
-    // Stud shadow
-    ctx2d.fillStyle = 'rgba(0,0,0,0.25)';
-    ctx2d.beginPath();
-    ctx2d.arc(cx, cy + 1.5, studRadius, 0, Math.PI * 2);
-    ctx2d.fill();
-
-    // Stud body (slightly lighter)
-    ctx2d.fillStyle = lightenHex(hexColor, 28);
-    ctx2d.beginPath();
-    ctx2d.arc(cx, cy, studRadius, 0, Math.PI * 2);
-    ctx2d.fill();
-
-    // Stud top-left highlight arc
-    ctx2d.strokeStyle = 'rgba(255,255,255,0.42)';
-    ctx2d.lineWidth = size * 0.05;
-    ctx2d.beginPath();
-    ctx2d.arc(cx, cy, studRadius - ctx2d.lineWidth / 2, Math.PI * 1.0, Math.PI * 1.65);
-    ctx2d.stroke();
-
-    // Stud inner shadow arc
-    ctx2d.strokeStyle = 'rgba(0,0,0,0.18)';
-    ctx2d.lineWidth = size * 0.04;
-    ctx2d.beginPath();
-    ctx2d.arc(cx, cy, studRadius - ctx2d.lineWidth, 0, Math.PI * 0.6);
-    ctx2d.stroke();
-}
-
-// ── WOODEN: beech-style block — soft bevel + low-alpha wood grain ─────────────
-function _drawWoodenTile(ctx2d, x, y, size, hexColor, isObstacle) {
-    const r = Math.max(3, size * 0.1);
-
-    // Base wood face
-    ctx2d.fillStyle = hexColor;
-    ctx2d.beginPath();
-    ctx2d.roundRect(x + 1, y + 1, size - 2, size - 2, r);
-    ctx2d.fill();
-
-    // Clip to the tile so grain + bevel stay inside the rounded square
-    ctx2d.save();
-    ctx2d.beginPath();
-    ctx2d.roundRect(x + 1, y + 1, size - 2, size - 2, r);
-    ctx2d.clip();
-
-    // Wood grain — a few gently wavy vertical strokes
-    ctx2d.strokeStyle = 'rgba(70, 45, 25, 0.14)';
-    ctx2d.lineWidth = Math.max(1, size * 0.018);
-    const lines = 4;
-    for (let i = 1; i <= lines; i++) {
-        const gx = x + (size * i) / (lines + 1);
-        ctx2d.beginPath();
-        ctx2d.moveTo(gx, y + 2);
-        ctx2d.quadraticCurveTo(gx + size * 0.06, y + size * 0.5, gx, y + size - 2);
-        ctx2d.stroke();
-    }
-    // A couple of lighter highlight grains
-    ctx2d.strokeStyle = 'rgba(255, 245, 225, 0.16)';
-    ctx2d.lineWidth = Math.max(1, size * 0.012);
-    for (let i = 1; i <= 2; i++) {
-        const gx = x + (size * (i + 0.5)) / (lines + 1);
-        ctx2d.beginPath();
-        ctx2d.moveTo(gx, y + 2);
-        ctx2d.quadraticCurveTo(gx - size * 0.05, y + size * 0.5, gx, y + size - 2);
-        ctx2d.stroke();
-    }
-
-    if (!isObstacle) {
-        // Soft top highlight + bottom shadow for a carved-block feel
-        ctx2d.fillStyle = 'rgba(255, 245, 225, 0.28)';
-        ctx2d.fillRect(x + 1, y + 1, size - 2, Math.max(2, size * 0.12));
-        ctx2d.fillStyle = 'rgba(60, 38, 20, 0.22)';
-        ctx2d.fillRect(x + 1, y + size - 1 - Math.max(2, size * 0.12), size - 2, Math.max(2, size * 0.12));
-    }
-    ctx2d.restore();
-
-    // Crisp inner edge
-    ctx2d.strokeStyle = 'rgba(60, 38, 20, 0.25)';
-    ctx2d.lineWidth = 1;
-    ctx2d.beginPath();
-    ctx2d.roundRect(x + 1.5, y + 1.5, size - 3, size - 3, r - 1);
-    ctx2d.stroke();
-}
-
-// ── MINECRAFT: real 16×16 block textures (crisp), with a flat-colour fallback ─
-// colorId → texture file in blocks/
-const MC_TEX = {
+const MINECRAFT_TEXTURES = {
     green:    'emerald_block',
     blue:     'lapis_block',
     yellow:   'gold_block',
@@ -316,185 +24,370 @@ const MC_TEX = {
     red:      'redstone_block',
     obstacle: 'stone'
 };
-const mcImages = {};
+const minecraftTextureImages = {};
+
 function preloadMinecraftTextures() {
-    for (const name of new Set(Object.values(MC_TEX))) {
-        if (mcImages[name]) continue;
-        const img = new Image();
-        img.src = 'blocks/' + name + '.png';
-        mcImages[name] = img;
+    for (const textureName of new Set(Object.values(MINECRAFT_TEXTURES))) {
+        if (minecraftTextureImages[textureName]) continue;
+        const image = new Image();
+        image.src = 'blocks/' + textureName + '.png';
+        minecraftTextureImages[textureName] = image;
     }
 }
+
 preloadMinecraftTextures();
 
-function _drawMinecraftTile(ctx2d, x, y, size, colorId, hexColor, isObstacle) {
-    const ix = x + 1, iy = y + 1, s = size - 2;
-
-    // Preferred path: draw the real block texture, crisp (nearest-neighbour)
-    const tex = mcImages[MC_TEX[colorId]];
-    if (tex && tex.complete && tex.naturalWidth > 0) {
-        const prevSmooth = ctx2d.imageSmoothingEnabled;
-        ctx2d.imageSmoothingEnabled = false;
-        ctx2d.drawImage(tex, ix, iy, s, s);
-        ctx2d.imageSmoothingEnabled = prevSmooth;
-        ctx2d.strokeStyle = 'rgba(0,0,0,0.30)';
-        ctx2d.lineWidth = 1;
-        ctx2d.strokeRect(ix + 0.5, iy + 0.5, s - 1, s - 1);
-        return;
-    }
-
-    // Fallback: flat-colour pixel block (texture not loaded / missing)
-    // Base face
-    ctx2d.fillStyle = hexColor;
-    ctx2d.fillRect(ix, iy, s, s);
-
-    // Ore speckles on a 4×4 sub-grid, seeded from the cell so they never flicker
-    const n = 4;
-    const cw = s / n;
-    const seed = (Math.round(x) * 73856093) ^ (Math.round(y) * 19349663);
-    for (let r = 0; r < n; r++) {
-        for (let c = 0; c < n; c++) {
-            const h = (seed + r * 374761393 + c * 668265263) >>> 0;
-            const v = h % 7;
-            if (v === 0) ctx2d.fillStyle = 'rgba(255,255,255,0.16)';
-            else if (v === 1) ctx2d.fillStyle = 'rgba(0,0,0,0.16)';
-            else continue;
-            ctx2d.fillRect(ix + c * cw, iy + r * cw, Math.ceil(cw), Math.ceil(cw));
-        }
-    }
-
-    // Blocky bevel: light top/left, dark bottom/right
-    const e = Math.max(2, size * 0.09);
-    ctx2d.fillStyle = 'rgba(255,255,255,0.30)';
-    ctx2d.fillRect(ix, iy, s, e);
-    ctx2d.fillRect(ix, iy, e, s);
-    ctx2d.fillStyle = 'rgba(0,0,0,0.32)';
-    ctx2d.fillRect(ix, iy + s - e, s, e);
-    ctx2d.fillRect(ix + s - e, iy, e, s);
-
-    // Dark grid outline (Minecraft block edges)
-    ctx2d.strokeStyle = 'rgba(0,0,0,0.35)';
-    ctx2d.lineWidth = 1;
-    ctx2d.strokeRect(ix + 0.5, iy + 0.5, s - 1, s - 1);
+function buildFrameTheme() {
+    return {
+        gridBackground: getThemeColor('gridBg'),
+        obstacle: getThemeColor('obstacle'),
+        emptyFill: getThemeColor('emptyCell'),
+        emptyBorder: getThemeColor('emptyBorder')
+    };
 }
 
-// ─────────────────────────────────────────────
-// MAIN DRAW FUNCTION
-// ─────────────────────────────────────────────
-function drawGame() {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    let shaken = false;
-    if (shakeTimer > 0) {
-        const offsetX = (Math.random() - 0.5) * shakeIntensity;
-        const offsetY = (Math.random() - 0.5) * shakeIntensity;
-        ctx.save();
-        ctx.translate(offsetX, offsetY);
-        shakeTimer--;
-        shakeIntensity *= 0.92;
-        shaken = true;
+function drawTile(context, x, y, size, colorId, isGhost, frameTheme) {
+    const hexColor = getThemeColor(colorId);
+    if (hexColor === frameTheme.gridBackground) {
+        drawEmptyCell(context, x, y, size, frameTheme);
+        return;
     }
+    if (isGhost) {
+        context.globalAlpha = 0.35;
+        context.fillStyle = hexColor;
+        context.beginPath();
+        context.roundRect(x + 1, y + 1, size - 2, size - 2, 4);
+        context.fill();
+        context.globalAlpha = 1.0;
+        return;
+    }
+    const renderTile = SKIN_RENDERERS[currentSkin] || drawBevelTile;
+    renderTile(context, x, y, size, colorId, hexColor, hexColor === frameTheme.obstacle);
+}
 
-    // 1. Draw 8×8 grid
-    for (let r = 0; r < GRID_SIZE; r++) {
-        for (let c = 0; c < GRID_SIZE; c++) {
-            const cell = grid[r][c];
-            const colorId = cell !== 0 ? cell : 'gridBg';
-            drawTile(ctx, c * CELL_SIZE, r * CELL_SIZE, CELL_SIZE, colorId, false);
+function drawEmptyCell(context, x, y, size, frameTheme) {
+    const fill = frameTheme.emptyFill;
+    if (fill && fill !== 'transparent' && fill !== 'none') {
+        context.fillStyle = fill;
+        context.beginPath();
+        context.roundRect(x + 1, y + 1, size - 2, size - 2, 8);
+        context.fill();
+    }
+    const border = frameTheme.emptyBorder;
+    if (border && border !== 'none') {
+        context.strokeStyle = border;
+        context.lineWidth = 1.5;
+        context.beginPath();
+        context.roundRect(x + 1.75, y + 1.75, size - 3.5, size - 3.5, 7);
+        context.stroke();
+    }
+}
+
+function drawBevelTile(context, x, y, size, colorId, hexColor, isObstacle) {
+    if (isObstacle) {
+        context.fillStyle = hexColor;
+        context.beginPath();
+        context.roundRect(x + 1, y + 1, size - 2, size - 2, 4);
+        context.fill();
+        return;
+    }
+    context.fillStyle = hexColor;
+    context.beginPath();
+    context.roundRect(x, y, size, size, 4);
+    context.fill();
+    context.save();
+    context.beginPath();
+    context.roundRect(x, y, size, size, 4);
+    context.clip();
+    const bevel = Math.max(2, size * 0.12);
+    context.fillStyle = 'rgba(255, 255, 255, 0.4)';
+    context.beginPath();
+    context.moveTo(x, y);
+    context.lineTo(x + size, y);
+    context.lineTo(x + size - bevel, y + bevel);
+    context.lineTo(x + bevel, y + bevel);
+    context.fill();
+    context.fillStyle = 'rgba(255, 255, 255, 0.2)';
+    context.beginPath();
+    context.moveTo(x, y);
+    context.lineTo(x + bevel, y + bevel);
+    context.lineTo(x + bevel, y + size - bevel);
+    context.lineTo(x, y + size);
+    context.fill();
+    context.fillStyle = 'rgba(0, 0, 0, 0.1)';
+    context.beginPath();
+    context.moveTo(x + size, y);
+    context.lineTo(x + size, y + size);
+    context.lineTo(x + size - bevel, y + size - bevel);
+    context.lineTo(x + size - bevel, y + bevel);
+    context.fill();
+    context.fillStyle = 'rgba(0, 0, 0, 0.35)';
+    context.beginPath();
+    context.moveTo(x, y + size);
+    context.lineTo(x + bevel, y + size - bevel);
+    context.lineTo(x + size - bevel, y + size - bevel);
+    context.lineTo(x + size, y + size);
+    context.fill();
+    context.fillStyle = hexColor;
+    context.beginPath();
+    context.roundRect(x + bevel, y + bevel, size - bevel * 2, size - bevel * 2, Math.max(1, 4 - bevel / 2));
+    context.fill();
+    context.restore();
+}
+
+function drawNeonTile(context, x, y, size, colorId, hexColor) {
+    context.save();
+    context.shadowColor = hexColor;
+    context.shadowBlur = 14;
+    context.fillStyle = 'rgba(255, 255, 255, 0.08)';
+    context.beginPath();
+    context.roundRect(x + 2, y + 2, size - 4, size - 4, 6);
+    context.fill();
+    context.shadowBlur = 8;
+    context.strokeStyle = hexColor;
+    context.lineWidth = 2.5;
+    context.beginPath();
+    context.roundRect(x + 2, y + 2, size - 4, size - 4, 6);
+    context.stroke();
+    context.shadowBlur = 0;
+    context.strokeStyle = 'rgba(255, 255, 255, 0.6)';
+    context.lineWidth = 1;
+    context.beginPath();
+    context.roundRect(x + 3.5, y + 3.5, size - 7, size - 7, 5);
+    context.stroke();
+    context.restore();
+}
+
+function drawLegoTile(context, x, y, size, colorId, hexColor, isObstacle) {
+    const radius = 3;
+    context.fillStyle = 'rgba(0,0,0,0.28)';
+    context.beginPath();
+    context.roundRect(x + 1, y + 2, size - 2, size - 2, radius);
+    context.fill();
+    context.fillStyle = hexColor;
+    context.beginPath();
+    context.roundRect(x, y, size - 1, size - 1, radius);
+    context.fill();
+    context.strokeStyle = 'rgba(255,255,255,0.22)';
+    context.lineWidth = 1.5;
+    context.beginPath();
+    context.moveTo(x + radius, y + 1);
+    context.lineTo(x + size - 2, y + 1);
+    context.stroke();
+    context.beginPath();
+    context.moveTo(x + 1, y + radius);
+    context.lineTo(x + 1, y + size - 2);
+    context.stroke();
+    if (isObstacle) return;
+    const studRadius = size * 0.18;
+    const centerX = x + size / 2 - 0.5;
+    const centerY = y + size / 2 - 0.5;
+    context.fillStyle = 'rgba(0,0,0,0.25)';
+    context.beginPath();
+    context.arc(centerX, centerY + 1.5, studRadius, 0, Math.PI * 2);
+    context.fill();
+    context.fillStyle = lightenHex(hexColor, 28);
+    context.beginPath();
+    context.arc(centerX, centerY, studRadius, 0, Math.PI * 2);
+    context.fill();
+    context.strokeStyle = 'rgba(255,255,255,0.42)';
+    context.lineWidth = size * 0.05;
+    context.beginPath();
+    context.arc(centerX, centerY, studRadius - context.lineWidth / 2, Math.PI * 1.0, Math.PI * 1.65);
+    context.stroke();
+    context.strokeStyle = 'rgba(0,0,0,0.18)';
+    context.lineWidth = size * 0.04;
+    context.beginPath();
+    context.arc(centerX, centerY, studRadius - context.lineWidth, 0, Math.PI * 0.6);
+    context.stroke();
+}
+
+function drawWoodenTile(context, x, y, size, colorId, hexColor, isObstacle) {
+    const radius = Math.max(3, size * 0.1);
+    context.fillStyle = hexColor;
+    context.beginPath();
+    context.roundRect(x + 1, y + 1, size - 2, size - 2, radius);
+    context.fill();
+    context.save();
+    context.beginPath();
+    context.roundRect(x + 1, y + 1, size - 2, size - 2, radius);
+    context.clip();
+    context.strokeStyle = 'rgba(70, 45, 25, 0.14)';
+    context.lineWidth = Math.max(1, size * 0.018);
+    const grainLines = 4;
+    for (let line = 1; line <= grainLines; line++) {
+        const grainX = x + (size * line) / (grainLines + 1);
+        context.beginPath();
+        context.moveTo(grainX, y + 2);
+        context.quadraticCurveTo(grainX + size * 0.06, y + size * 0.5, grainX, y + size - 2);
+        context.stroke();
+    }
+    context.strokeStyle = 'rgba(255, 245, 225, 0.16)';
+    context.lineWidth = Math.max(1, size * 0.012);
+    for (let line = 1; line <= 2; line++) {
+        const grainX = x + (size * (line + 0.5)) / (grainLines + 1);
+        context.beginPath();
+        context.moveTo(grainX, y + 2);
+        context.quadraticCurveTo(grainX - size * 0.05, y + size * 0.5, grainX, y + size - 2);
+        context.stroke();
+    }
+    if (!isObstacle) {
+        const edge = Math.max(2, size * 0.12);
+        context.fillStyle = 'rgba(255, 245, 225, 0.28)';
+        context.fillRect(x + 1, y + 1, size - 2, edge);
+        context.fillStyle = 'rgba(60, 38, 20, 0.22)';
+        context.fillRect(x + 1, y + size - 1 - edge, size - 2, edge);
+    }
+    context.restore();
+    context.strokeStyle = 'rgba(60, 38, 20, 0.25)';
+    context.lineWidth = 1;
+    context.beginPath();
+    context.roundRect(x + 1.5, y + 1.5, size - 3, size - 3, radius - 1);
+    context.stroke();
+}
+
+function drawMinecraftTile(context, x, y, size, colorId, hexColor, isObstacle) {
+    const innerX = x + 1;
+    const innerY = y + 1;
+    const innerSize = size - 2;
+    const texture = minecraftTextureImages[MINECRAFT_TEXTURES[colorId]];
+    if (texture && texture.complete && texture.naturalWidth > 0) {
+        const previousSmoothing = context.imageSmoothingEnabled;
+        context.imageSmoothingEnabled = false;
+        context.drawImage(texture, innerX, innerY, innerSize, innerSize);
+        context.imageSmoothingEnabled = previousSmoothing;
+        context.strokeStyle = 'rgba(0,0,0,0.30)';
+        context.lineWidth = 1;
+        context.strokeRect(innerX + 0.5, innerY + 0.5, innerSize - 1, innerSize - 1);
+        return;
+    }
+    context.fillStyle = hexColor;
+    context.fillRect(innerX, innerY, innerSize, innerSize);
+    const speckleGrid = 4;
+    const speckleSize = innerSize / speckleGrid;
+    const seed = (Math.round(x) * 73856093) ^ (Math.round(y) * 19349663);
+    for (let row = 0; row < speckleGrid; row++) {
+        for (let col = 0; col < speckleGrid; col++) {
+            const hash = (seed + row * 374761393 + col * 668265263) >>> 0;
+            const variant = hash % 7;
+            if (variant === 0) context.fillStyle = 'rgba(255,255,255,0.16)';
+            else if (variant === 1) context.fillStyle = 'rgba(0,0,0,0.16)';
+            else continue;
+            context.fillRect(innerX + col * speckleSize, innerY + row * speckleSize, Math.ceil(speckleSize), Math.ceil(speckleSize));
         }
     }
+    const edge = Math.max(2, size * 0.09);
+    context.fillStyle = 'rgba(255,255,255,0.30)';
+    context.fillRect(innerX, innerY, innerSize, edge);
+    context.fillRect(innerX, innerY, edge, innerSize);
+    context.fillStyle = 'rgba(0,0,0,0.32)';
+    context.fillRect(innerX, innerY + innerSize - edge, innerSize, edge);
+    context.fillRect(innerX + innerSize - edge, innerY, edge, innerSize);
+    context.strokeStyle = 'rgba(0,0,0,0.35)';
+    context.lineWidth = 1;
+    context.strokeRect(innerX + 0.5, innerY + 0.5, innerSize - 1, innerSize - 1);
+}
 
-    // 2. Draw resting shapes (not being dragged)
-    availableShapes.forEach((shape, index) => {
+const SKIN_RENDERERS = {
+    default: drawBevelTile,
+    neon: drawNeonTile,
+    lego: drawLegoTile,
+    wooden: drawWoodenTile,
+    minecraft: drawMinecraftTile
+};
+
+function drawGame() {
+    canvasContext.clearRect(0, 0, canvas.width, canvas.height);
+    const frameTheme = buildFrameTheme();
+    let shaken = false;
+    if (shakeFramesRemaining > 0) {
+        const offsetX = (Math.random() - 0.5) * shakeStrength;
+        const offsetY = (Math.random() - 0.5) * shakeStrength;
+        canvasContext.save();
+        canvasContext.translate(offsetX, offsetY);
+        shakeFramesRemaining--;
+        shakeStrength *= 0.92;
+        shaken = true;
+    }
+    for (let row = 0; row < GRID_SIZE; row++) {
+        for (let col = 0; col < GRID_SIZE; col++) {
+            const cell = gameState.grid[row][col];
+            const colorId = cell !== 0 ? cell : 'gridBg';
+            drawTile(canvasContext, col * CELL_SIZE, row * CELL_SIZE, CELL_SIZE, colorId, false, frameTheme);
+        }
+    }
+    gameState.availableShapes.forEach((shape, index) => {
         if (!shape) return;
-        if (index === draggingShapeIndex) return;
-        drawShape(shape, shape.baseX, shape.baseY);
+        if (index === dragState.shapeIndex) return;
+        drawShape(shape, shape.baseX, shape.baseY, false, frameTheme);
     });
-
-    // 3. Ghost preview, still attached to the board shake
-    if (draggingShapeIndex !== -1 && availableShapes[draggingShapeIndex]) {
-        const shape = availableShapes[draggingShapeIndex];
-
-        const dropX = mouseX - dragOffsetX;
-        const dropY = mouseY - dragOffsetY;
-        const gridC = Math.round(dropX / CELL_SIZE);
-        const gridR = Math.round(dropY / CELL_SIZE);
-
-        if (canPlace(shape, gridR, gridC)) {
-            // Ghost tiles on board
-            ctx.globalAlpha = 0.3;
-            for (let r = 0; r < shape.blocks.length; r++) {
-                for (let c = 0; c < shape.blocks[r].length; c++) {
-                    if (shape.blocks[r][c] === 1) {
-                        drawTile(ctx, (gridC + c) * CELL_SIZE, (gridR + r) * CELL_SIZE, CELL_SIZE, shape.colorId, true);
+    if (dragState.shapeIndex !== -1 && gameState.availableShapes[dragState.shapeIndex]) {
+        const shape = gameState.availableShapes[dragState.shapeIndex];
+        const dropX = dragState.pointerX - dragState.offsetX;
+        const dropY = dragState.pointerY - dragState.offsetY;
+        const gridCol = Math.round(dropX / CELL_SIZE);
+        const gridRow = Math.round(dropY / CELL_SIZE);
+        if (canPlaceShapeAt(shape, gridRow, gridCol)) {
+            canvasContext.globalAlpha = 0.3;
+            for (let row = 0; row < shape.blocks.length; row++) {
+                for (let col = 0; col < shape.blocks[row].length; col++) {
+                    if (shape.blocks[row][col] === 1) {
+                        drawTile(canvasContext, (gridCol + col) * CELL_SIZE, (gridRow + row) * CELL_SIZE, CELL_SIZE, shape.colorId, true, frameTheme);
                     }
                 }
             }
-            ctx.globalAlpha = 1.0;
-
-            // Predict which rows/cols would clear
-            let tempRows = [];
-            let tempCols = [];
-
-            for (let r = 0; r < GRID_SIZE; r++) {
+            canvasContext.globalAlpha = 1.0;
+            const predictedRows = [];
+            const predictedCols = [];
+            for (let row = 0; row < GRID_SIZE; row++) {
                 let isFull = true;
-                for (let c = 0; c < GRID_SIZE; c++) {
-                    const sr = r - gridR;
-                    const sc = c - gridC;
-                    const isGhostCell = sr >= 0 && sr < shape.blocks.length &&
-                        sc >= 0 && sc < shape.blocks[0].length &&
-                        shape.blocks[sr][sc] === 1;
-                    if (grid[r][c] === 0 && !isGhostCell) { isFull = false; break; }
+                for (let col = 0; col < GRID_SIZE; col++) {
+                    const shapeRow = row - gridRow;
+                    const shapeCol = col - gridCol;
+                    const isGhostCell = shapeRow >= 0 && shapeRow < shape.blocks.length &&
+                        shapeCol >= 0 && shapeCol < shape.blocks[0].length &&
+                        shape.blocks[shapeRow][shapeCol] === 1;
+                    if (gameState.grid[row][col] === 0 && !isGhostCell) { isFull = false; break; }
                 }
-                if (isFull) tempRows.push(r);
+                if (isFull) predictedRows.push(row);
             }
-
-            for (let c = 0; c < GRID_SIZE; c++) {
+            for (let col = 0; col < GRID_SIZE; col++) {
                 let isFull = true;
-                for (let r = 0; r < GRID_SIZE; r++) {
-                    const sr = r - gridR;
-                    const sc = c - gridC;
-                    const isGhostCell = sr >= 0 && sr < shape.blocks.length &&
-                        sc >= 0 && sc < shape.blocks[0].length &&
-                        shape.blocks[sr][sc] === 1;
-                    if (grid[r][c] === 0 && !isGhostCell) { isFull = false; break; }
+                for (let row = 0; row < GRID_SIZE; row++) {
+                    const shapeRow = row - gridRow;
+                    const shapeCol = col - gridCol;
+                    const isGhostCell = shapeRow >= 0 && shapeRow < shape.blocks.length &&
+                        shapeCol >= 0 && shapeCol < shape.blocks[0].length &&
+                        shape.blocks[shapeRow][shapeCol] === 1;
+                    if (gameState.grid[row][col] === 0 && !isGhostCell) { isFull = false; break; }
                 }
-                if (isFull) tempCols.push(c);
+                if (isFull) predictedCols.push(col);
             }
-
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
-            tempRows.forEach(r => ctx.fillRect(0, r * CELL_SIZE, GRID_SIZE * CELL_SIZE, CELL_SIZE));
-            tempCols.forEach(c => ctx.fillRect(c * CELL_SIZE, 0, CELL_SIZE, GRID_SIZE * CELL_SIZE));
+            canvasContext.fillStyle = 'rgba(255, 255, 255, 0.2)';
+            predictedRows.forEach(row => canvasContext.fillRect(0, row * CELL_SIZE, GRID_SIZE * CELL_SIZE, CELL_SIZE));
+            predictedCols.forEach(col => canvasContext.fillRect(col * CELL_SIZE, 0, CELL_SIZE, GRID_SIZE * CELL_SIZE));
         }
     }
-
-    if (shaken) ctx.restore();
-
+    if (shaken) canvasContext.restore();
     updateAndDrawParticles();
-
-    // 4. Lifted dragging piece, drawn outside the shake transform
-    if (draggingShapeIndex !== -1 && availableShapes[draggingShapeIndex]) {
-        const shape = availableShapes[draggingShapeIndex];
-
-        // Lifted dragging piece
-        ctx.save();
-        ctx.shadowColor = 'rgba(0, 0, 0, 0.55)';
-        ctx.shadowBlur = 18;
-        ctx.shadowOffsetX = 4;
-        ctx.shadowOffsetY = 8;
-        drawShape(shape, mouseX - dragOffsetX, mouseY - dragOffsetY, true);
-        ctx.restore();
+    if (dragState.shapeIndex !== -1 && gameState.availableShapes[dragState.shapeIndex]) {
+        const shape = gameState.availableShapes[dragState.shapeIndex];
+        canvasContext.save();
+        canvasContext.shadowColor = 'rgba(0, 0, 0, 0.55)';
+        canvasContext.shadowBlur = 18;
+        canvasContext.shadowOffsetX = 4;
+        canvasContext.shadowOffsetY = 8;
+        drawShape(shape, dragState.pointerX - dragState.offsetX, dragState.pointerY - dragState.offsetY, true, frameTheme);
+        canvasContext.restore();
     }
 }
 
-// Draw a shape at (x, y) in the bottom panel or dragging position
-function drawShape(shape, x, y, isDragging = false) {
+function drawShape(shape, x, y, isDragging, frameTheme) {
     const scale = isDragging ? CELL_SIZE : (shape.previewCellSize || SHAPE_PREVIEW_CELL_SIZE);
-
-    for (let r = 0; r < shape.blocks.length; r++) {
-        for (let c = 0; c < shape.blocks[r].length; c++) {
-            if (shape.blocks[r][c] === 1) {
-                drawTile(ctx, x + c * scale, y + r * scale, scale, shape.colorId, false);
+    for (let row = 0; row < shape.blocks.length; row++) {
+        for (let col = 0; col < shape.blocks[row].length; col++) {
+            if (shape.blocks[row][col] === 1) {
+                drawTile(canvasContext, x + col * scale, y + row * scale, scale, shape.colorId, false, frameTheme);
             }
         }
     }
@@ -502,79 +395,72 @@ function drawShape(shape, x, y, isDragging = false) {
 
 function updateAndDrawParticles() {
     if (particles.length === 0) return;
-
-    ctx.save();
-
-    for (let i = particles.length - 1; i >= 0; i--) {
-        const particle = particles[i];
-
-        particle.x += particle.vx;
-        particle.y += particle.vy;
-        particle.vy += particle.gravity;
+    canvasContext.save();
+    for (let index = particles.length - 1; index >= 0; index--) {
+        const particle = particles[index];
+        particle.x += particle.velocityX;
+        particle.y += particle.velocityY;
+        particle.velocityY += particle.gravity;
         particle.alpha -= 0.02;
-
         if (particle.alpha <= 0) {
-            particles.splice(i, 1);
+            particles.splice(index, 1);
             continue;
         }
-
-        ctx.globalAlpha = particle.alpha;
-        ctx.fillStyle = particle.color;
-        ctx.fillRect(
+        canvasContext.globalAlpha = particle.alpha;
+        canvasContext.fillStyle = particle.color;
+        canvasContext.fillRect(
             particle.x - particle.size / 2,
             particle.y - particle.size / 2,
             particle.size,
             particle.size
         );
     }
-
-    ctx.globalAlpha = 1;
-    ctx.restore();
+    canvasContext.globalAlpha = 1;
+    canvasContext.restore();
 }
 
-// Mark the canvas dirty so the next frame redraws (call after any board change).
 function requestRedraw() {
     needsRedraw = true;
 }
 
-function gameLoop() {
-    // Redraw only when on-screen AND something changed or an animation is live —
-    // a static board no longer burns 60fps of canvas work.
+function runRenderLoop() {
     if (gameScreen.classList.contains('active')) {
-        const animating = draggingShapeIndex !== -1 || particles.length > 0 || shakeTimer > 0;
+        const animating = dragState.shapeIndex !== -1 || particles.length > 0 || shakeFramesRemaining > 0;
         if (needsRedraw || animating) {
             drawGame();
             needsRedraw = false;
         }
     }
-    requestAnimationFrame(gameLoop);
+    requestAnimationFrame(runRenderLoop);
 }
 
-// Scale the header + board down to fit small screens (fixes mobile overflow).
-// Input mapping stays correct because getMousePos() divides by the canvas's
-// scaled getBoundingClientRect width, and the overlay/flash effects live inside
-// the scaled subtree.
 function fitBoard() {
     const boardFit = document.getElementById('board-fit');
     if (!boardFit) return;
-
-    // Measure natural (unscaled) size; bail if the screen is hidden (size 0).
     boardFit.style.transform = 'none';
     boardFit.style.marginBottom = '0';
-    const naturalW = boardFit.offsetWidth;
-    const naturalH = boardFit.offsetHeight;
-    if (naturalW === 0 || naturalH === 0) return;
-
-    const pad = parseFloat(getComputedStyle(gameScreen).paddingLeft) || 18;
+    const naturalWidth = boardFit.offsetWidth;
+    const naturalHeight = boardFit.offsetHeight;
+    if (naturalWidth === 0 || naturalHeight === 0) return;
+    const pagePadding = parseFloat(getComputedStyle(gameScreen).paddingLeft) || 18;
     const topbar = document.querySelector('#game-screen .topbar');
-    const topbarH = topbar ? topbar.offsetHeight : 0;
-    const availW = window.innerWidth - pad * 2;
-    const availH = window.innerHeight - topbarH - 40; // breathing room
-
-    const scale = Math.min(1, availW / naturalW, availH / naturalH);
+    const topbarHeight = topbar ? topbar.offsetHeight : 0;
+    const availableWidth = window.innerWidth - pagePadding * 2;
+    const availableHeight = window.innerHeight - topbarHeight - 40;
+    const scale = Math.min(1, availableWidth / naturalWidth, availableHeight / naturalHeight);
     boardFit.style.transform = `scale(${scale})`;
-    // transform doesn't shrink the layout box — pull the page back up to match.
-    boardFit.style.marginBottom = `${-naturalH * (1 - scale)}px`;
+    boardFit.style.marginBottom = `${-naturalHeight * (1 - scale)}px`;
 }
 
-window.addEventListener('resize', fitBoard);
+let boardFitQueued = false;
+
+function queueBoardFit() {
+    if (boardFitQueued) return;
+    boardFitQueued = true;
+    requestAnimationFrame(() => {
+        boardFitQueued = false;
+        fitBoard();
+    });
+}
+
+window.addEventListener('resize', queueBoardFit);

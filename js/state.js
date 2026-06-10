@@ -1,6 +1,3 @@
-// ─────────────────────────────────────────────
-// DOM REFERENCES & MUTABLE GAME STATE
-// ─────────────────────────────────────────────
 const mainMenu = document.getElementById('main-menu');
 const gameScreen = document.getElementById('game-screen');
 const playButton = document.getElementById('play-button');
@@ -9,60 +6,60 @@ const restartButton = document.getElementById('restart-button');
 const scoreElement = document.getElementById('score');
 const highScoreElement = document.getElementById('high-score');
 const undoButton = document.getElementById('undo-button');
+const comboDisplay = document.getElementById('combo-display');
+const floatingTextContainer = document.getElementById('floating-text-container');
+const gridOverlay = document.getElementById('grid-overlay');
+const gameOverModal = document.getElementById('game-over-modal');
+const finalScoreElement = document.getElementById('final-score');
+const modalBestScoreElement = document.getElementById('modal-best-score');
 
 const settingsModal = document.getElementById('settings-modal');
 const settingsClose = document.getElementById('settings-close');
 const toggleSound = document.getElementById('toggle-sound');
-const toggleBgm = document.getElementById('toggle-bgm');
-const toggleVibe = document.getElementById('toggle-vibe');
+const toggleMusic = document.getElementById('toggle-bgm');
+const toggleVibration = document.getElementById('toggle-vibe');
 const settingsHome = document.getElementById('settings-home');
 const settingsReplay = document.getElementById('settings-replay');
-const themeSwitcherBtn = document.getElementById('theme-switcher-btn');
+const changeSkinButton = document.getElementById('theme-switcher-btn');
+const skinModal = document.getElementById('skin-modal');
+const skinBackButton = document.getElementById('skin-back');
+const volumeSlider = document.getElementById('volumeSlider');
 
-// Core game state
-let grid = Array(GRID_SIZE).fill().map(() => Array(GRID_SIZE).fill(0));
-let score = 0;
-let comboStreak = 0;
-let isGameRunning = false;
-let availableShapes = [];
-let linesClearedThisRound = false;
-
-// ─────────────────────────────────────────────
-// AUDIO SETTINGS (A2: persisted across sessions)
-// ─────────────────────────────────────────────
-function loadBoolPref(key, fallback) {
-    const v = localStorage.getItem(key);
-    if (v === null) return fallback;
-    return v === '1';
+function createEmptyGrid() {
+    return Array.from({ length: GRID_SIZE }, () => Array(GRID_SIZE).fill(0));
 }
-let isSoundEnabled = loadBoolPref('bb_sound', true);
-let isMusicEnabled = loadBoolPref('bb_music', false);
-let isVibrationEnabled = loadBoolPref('bb_vibe', true);
-let gameVolume = localStorage.getItem('gameVolume') !== null
-    ? parseFloat(localStorage.getItem('gameVolume'))
-    : 0.8;
 
-// Feature D: High Score Initialization
-let highScore = parseInt(localStorage.getItem('block_blast_highscore')) || 0;
+const gameState = {
+    grid: createEmptyGrid(),
+    availableShapes: [],
+    score: 0,
+    comboStreak: 0,
+    clearedLineThisRound: false,
+    isRunning: false,
+    turnToken: 0
+};
+
+const settings = {
+    soundEnabled: loadBooleanSetting('soundEnabled', true),
+    musicEnabled: loadBooleanSetting('musicEnabled', false),
+    vibrationEnabled: loadBooleanSetting('vibrationEnabled', true),
+    volume: loadNumberSetting('volume', 0.8, 0, 1)
+};
+
+let highScore = loadNumberSetting('highScore', 0, 0, Number.MAX_SAFE_INTEGER);
 highScoreElement.textContent = formatScore(highScore);
 
-// Drag and drop state
-let draggingShapeIndex = -1;
-let mouseX = 0;
-let mouseY = 0;
-let dragOffsetX = 0;
-let dragOffsetY = 0;
+const dragState = {
+    shapeIndex: -1,
+    pointerX: 0,
+    pointerY: 0,
+    offsetX: 0,
+    offsetY: 0
+};
 
-// Native canvas juice effects
 let particles = [];
-let shakeTimer = 0;
-let shakeIntensity = 0;
-
-let loopStarted = false;
-
-// Render dirty-flag: the loop only redraws when this is set or an animation is
-// active (drag/particles/shake), instead of every frame while idle.
+let shakeFramesRemaining = 0;
+let shakeStrength = 0;
+let renderLoopStarted = false;
 let needsRedraw = true;
-
-// C2: one-step undo snapshot (null = nothing to undo)
-let undoState = null;
+let undoSnapshot = null;

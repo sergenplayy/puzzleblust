@@ -1,60 +1,54 @@
-// ─────────────────────────────────────────────
-// CORE GAME LOGIC — board, scoring, refill, game-over, undo
-// ─────────────────────────────────────────────
 function startGame(forceRestart = false) {
-    if (forceRestart || availableShapes.length === 0) {
-        initGrid();
+    if (forceRestart || gameState.availableShapes.length === 0) {
+        resetGameState();
     }
-    isGameRunning = true;
-    document.getElementById('combo-display').classList.remove('pop');
-
+    gameState.isRunning = true;
+    gameState.turnToken++;
+    comboDisplay.classList.remove('pop');
     requestRedraw();
     fitBoard();
-    refreshBgm();
-
-    if (!loopStarted) {
-        loopStarted = true;
-        requestAnimationFrame(gameLoop);
+    syncBackgroundMusic();
+    if (!renderLoopStarted) {
+        renderLoopStarted = true;
+        requestAnimationFrame(runRenderLoop);
     }
 }
 
-// Feature A: Initial Board Generation
-function initGrid() {
-    grid = Array(GRID_SIZE).fill().map(() => Array(GRID_SIZE).fill(0));
-    score = 0;
-    comboStreak = 0;
-    linesClearedThisRound = false;
-    clearUndo();
+function resetGameState() {
+    gameState.grid = createEmptyGrid();
+    gameState.score = 0;
+    gameState.comboStreak = 0;
+    gameState.clearedLineThisRound = false;
+    lockUndo();
+    floatingTextContainer.innerHTML = '';
     updateScore();
-
-    const initialBlocksCount = Math.floor(Math.random() * 6) + 10;
-    let placed = 0;
-    let rowCounts = Array(GRID_SIZE).fill(0);
-    let colCounts = Array(GRID_SIZE).fill(0);
-
-    while (placed < initialBlocksCount) {
-        const r = Math.floor(Math.random() * GRID_SIZE);
-        const c = Math.floor(Math.random() * GRID_SIZE);
-
-        if (grid[r][c] === 0 && rowCounts[r] < 6 && colCounts[c] < 6) {
-            grid[r][c] = 'obstacle';
-            rowCounts[r]++;
-            colCounts[c]++;
-            placed++;
+    const obstacleTarget = Math.floor(Math.random() * 6) + 10;
+    let placedObstacles = 0;
+    const rowCounts = Array(GRID_SIZE).fill(0);
+    const colCounts = Array(GRID_SIZE).fill(0);
+    while (placedObstacles < obstacleTarget) {
+        const row = Math.floor(Math.random() * GRID_SIZE);
+        const col = Math.floor(Math.random() * GRID_SIZE);
+        if (gameState.grid[row][col] === 0 && rowCounts[row] < 6 && colCounts[col] < 6) {
+            gameState.grid[row][col] = 'obstacle';
+            rowCounts[row]++;
+            colCounts[col]++;
+            placedObstacles++;
         }
     }
-
-    availableShapes = [];
-    refillShapes();
+    gameState.availableShapes = [];
+    refillShapeTray();
+    saveGameState();
 }
 
-function canPlace(shape, gridR, gridC) {
-    for (let r = 0; r < shape.blocks.length; r++) {
-        for (let c = 0; c < shape.blocks[r].length; c++) {
-            if (shape.blocks[r][c] === 1) {
-                const targetR = gridR + r;
-                const targetC = gridC + c;
-                if (targetR < 0 || targetR >= GRID_SIZE || targetC < 0 || targetC >= GRID_SIZE || grid[targetR][targetC] !== 0) {
+function canPlaceShapeAt(shape, gridRow, gridCol) {
+    for (let row = 0; row < shape.blocks.length; row++) {
+        for (let col = 0; col < shape.blocks[row].length; col++) {
+            if (shape.blocks[row][col] === 1) {
+                const targetRow = gridRow + row;
+                const targetCol = gridCol + col;
+                if (targetRow < 0 || targetRow >= GRID_SIZE || targetCol < 0 || targetCol >= GRID_SIZE ||
+                    gameState.grid[targetRow][targetCol] !== 0) {
                     return false;
                 }
             }
@@ -63,55 +57,56 @@ function canPlace(shape, gridR, gridC) {
     return true;
 }
 
-// Feature B: Smart Piece Generation Algorithm
-function refillShapes() {
-    availableShapes = [];
+function shuffleArray(items) {
+    const shuffled = [...items];
+    for (let index = shuffled.length - 1; index > 0; index--) {
+        const swapIndex = Math.floor(Math.random() * (index + 1));
+        [shuffled[index], shuffled[swapIndex]] = [shuffled[swapIndex], shuffled[index]];
+    }
+    return shuffled;
+}
 
+function refillShapeTray() {
+    gameState.availableShapes = [];
     let maxFill = 0;
     let targetEmptyCells = [];
-
-    for (let r = 0; r < GRID_SIZE; r++) {
-        let count = grid[r].filter(cell => cell !== 0).length;
+    for (let row = 0; row < GRID_SIZE; row++) {
+        const count = gameState.grid[row].filter(cell => cell !== 0).length;
         if (count > maxFill && count < GRID_SIZE) {
             maxFill = count;
             targetEmptyCells = [];
-            for (let c = 0; c < GRID_SIZE; c++) {
-                if (grid[r][c] === 0) targetEmptyCells.push({ r, c });
+            for (let col = 0; col < GRID_SIZE; col++) {
+                if (gameState.grid[row][col] === 0) targetEmptyCells.push({ row, col });
             }
         } else if (count === maxFill && count < GRID_SIZE) {
-            for (let c = 0; c < GRID_SIZE; c++) {
-                if (grid[r][c] === 0) targetEmptyCells.push({ r, c });
+            for (let col = 0; col < GRID_SIZE; col++) {
+                if (gameState.grid[row][col] === 0) targetEmptyCells.push({ row, col });
             }
         }
     }
-
-    for (let c = 0; c < GRID_SIZE; c++) {
+    for (let col = 0; col < GRID_SIZE; col++) {
         let count = 0;
-        let emptyInCol = [];
-        for (let r = 0; r < GRID_SIZE; r++) {
-            if (grid[r][c] !== 0) count++;
-            else emptyInCol.push({ r, c });
+        const emptyInColumn = [];
+        for (let row = 0; row < GRID_SIZE; row++) {
+            if (gameState.grid[row][col] !== 0) count++;
+            else emptyInColumn.push({ row, col });
         }
         if (count > maxFill && count < GRID_SIZE) {
             maxFill = count;
-            targetEmptyCells = emptyInCol;
+            targetEmptyCells = emptyInColumn;
         } else if (count === maxFill && count < GRID_SIZE) {
-            targetEmptyCells.push(...emptyInCol);
+            targetEmptyCells.push(...emptyInColumn);
         }
     }
-
-    let smartShapeFound = null;
+    let helpfulShape = null;
     if (targetEmptyCells.length > 0) {
-        const shuffledDefs = [...SHAPE_DEFS].sort(() => Math.random() - 0.5);
-        for (const def of shuffledDefs) {
+        for (const definition of shuffleArray(SHAPE_DEFINITIONS)) {
             let fits = false;
             for (const target of targetEmptyCells) {
-                for (let sr = 0; sr < def.blocks.length; sr++) {
-                    for (let sc = 0; sc < def.blocks[0].length; sc++) {
-                        if (def.blocks[sr][sc] === 1) {
-                            const gridR = target.r - sr;
-                            const gridC = target.c - sc;
-                            if (canPlace(def, gridR, gridC)) {
+                for (let shapeRow = 0; shapeRow < definition.blocks.length; shapeRow++) {
+                    for (let shapeCol = 0; shapeCol < definition.blocks[0].length; shapeCol++) {
+                        if (definition.blocks[shapeRow][shapeCol] === 1) {
+                            if (canPlaceShapeAt(definition, target.row - shapeRow, target.col - shapeCol)) {
                                 fits = true;
                                 break;
                             }
@@ -122,37 +117,30 @@ function refillShapes() {
                 if (fits) break;
             }
             if (fits) {
-                smartShapeFound = def;
+                helpfulShape = definition;
                 break;
             }
         }
     }
-
-    const shape0 = smartShapeFound || SHAPE_DEFS[Math.floor(Math.random() * SHAPE_DEFS.length)];
-    const shape1 = SHAPE_DEFS[Math.floor(Math.random() * SHAPE_DEFS.length)];
-    const shape2 = SHAPE_DEFS[Math.floor(Math.random() * SHAPE_DEFS.length)];
-
-    const newShapes = [shape0, shape1, shape2]
-        .sort(() => Math.random() - 0.5)
-        .map(cloneShapeWithRandomColor);
-
-    const gridBottom = GRID_SIZE * CELL_SIZE;
-    const panelY = gridBottom + 45;
-    const availableWidth = canvas.width;
-    const slotWidth = availableWidth / 3;
-
-    for (let i = 0; i < 3; i++) {
-        const shape = newShapes[i];
+    const pickRandomDefinition = () => SHAPE_DEFINITIONS[Math.floor(Math.random() * SHAPE_DEFINITIONS.length)];
+    const newShapes = shuffleArray([
+        helpfulShape || pickRandomDefinition(),
+        pickRandomDefinition(),
+        pickRandomDefinition()
+    ]).map(cloneShapeWithRandomColor);
+    const trayTop = GRID_SIZE * CELL_SIZE + 45;
+    const slotWidth = canvas.width / 3;
+    for (let slot = 0; slot < 3; slot++) {
+        const shape = newShapes[slot];
         const previewCellSize = getPreviewCellSize(shape, slotWidth);
         const bounds = getShapePixelBounds(shape, previewCellSize);
-        const slotCenterX = slotWidth * i + slotWidth / 2;
-
-        availableShapes.push({
+        const slotCenterX = slotWidth * slot + slotWidth / 2;
+        gameState.availableShapes.push({
             blocks: shape.blocks,
             colorId: shape.colorId,
             previewCellSize,
             baseX: slotCenterX - bounds.width / 2,
-            baseY: panelY + 20
+            baseY: trayTop + 20
         });
     }
     requestRedraw();
@@ -160,259 +148,247 @@ function refillShapes() {
 
 function updateScore() {
     requestRedraw();
-    scoreElement.textContent = formatScore(score);
-    // Live high-score: reflect a new best immediately (don't wait for game-over)
-    if (score > highScore) {
-        highScore = score;
-        localStorage.setItem('block_blast_highscore', highScore);
+    scoreElement.textContent = formatScore(gameState.score);
+    if (gameState.score > highScore) {
+        highScore = gameState.score;
+        saveSetting('highScore', highScore);
         highScoreElement.textContent = formatScore(highScore);
     }
 }
 
-// Count a number up to a target over ~600ms (used on the game-over modal)
-function animateCountUp(el, target, duration = 600) {
-    const start = performance.now();
+function animateScoreCountUp(element, target, duration = 600) {
+    const startTime = performance.now();
     function tick(now) {
-        const t = Math.min(1, (now - start) / duration);
-        const eased = 1 - Math.pow(1 - t, 3);
-        el.textContent = formatScore(Math.round(target * eased));
-        if (t < 1) requestAnimationFrame(tick);
+        const progress = Math.min(1, (now - startTime) / duration);
+        const eased = 1 - Math.pow(1 - progress, 3);
+        element.textContent = formatScore(Math.round(target * eased));
+        if (progress < 1) requestAnimationFrame(tick);
     }
     requestAnimationFrame(tick);
 }
 
-function resetCombo() {
-    comboStreak = 0;
-}
-
-function calculateScore(baseBlocksCount, linesCleared) {
-    let turnScore = baseBlocksCount;
+function calculateTurnPoints(blockCount, linesCleared) {
+    let points = blockCount;
     if (linesCleared > 0) {
-        linesClearedThisRound = true;
-        comboStreak += 1;
-
+        gameState.clearedLineThisRound = true;
+        gameState.comboStreak += 1;
         let linePoints = 0;
         if (linesCleared === 1) linePoints = 10;
         else if (linesCleared === 2) linePoints = 30;
         else if (linesCleared === 3) linePoints = 60;
-        else if (linesCleared >= 4) linePoints = 100;
-
-        turnScore += linePoints;
-        const comboBonus = (comboStreak - 1) * 10 * linesCleared;
-        turnScore += comboBonus;
+        else linePoints = 100;
+        points += linePoints;
+        points += (gameState.comboStreak - 1) * 10 * linesCleared;
     }
-    return turnScore;
+    return points;
 }
 
-function findClearedLines() {
-    let rowsToClear = [];
-    let colsToClear = [];
-
-    for (let r = 0; r < GRID_SIZE; r++) {
-        if (grid[r].every(cell => cell !== 0)) rowsToClear.push(r);
+function findCompletedLines() {
+    const rowsToClear = [];
+    const colsToClear = [];
+    for (let row = 0; row < GRID_SIZE; row++) {
+        if (gameState.grid[row].every(cell => cell !== 0)) rowsToClear.push(row);
     }
-
-    for (let c = 0; c < GRID_SIZE; c++) {
+    for (let col = 0; col < GRID_SIZE; col++) {
         let isFull = true;
-        for (let r = 0; r < GRID_SIZE; r++) {
-            if (grid[r][c] === 0) { isFull = false; break; }
+        for (let row = 0; row < GRID_SIZE; row++) {
+            if (gameState.grid[row][col] === 0) { isFull = false; break; }
         }
-        if (isFull) colsToClear.push(c);
+        if (isFull) colsToClear.push(col);
     }
-
     return { rowsToClear, colsToClear };
 }
 
-function placePiece(shape, gridR, gridC) {
-    let blocksCount = 0;
-    if (!canPlace(shape, gridR, gridC)) return { success: false };
-
-    for (let r = 0; r < shape.blocks.length; r++) {
-        for (let c = 0; c < shape.blocks[r].length; c++) {
-            if (shape.blocks[r][c] === 1) {
-                grid[gridR + r][gridC + c] = shape.colorId;
-                blocksCount++;
+function placeShapeOnGrid(shape, gridRow, gridCol) {
+    if (!canPlaceShapeAt(shape, gridRow, gridCol)) return { success: false };
+    let blockCount = 0;
+    for (let row = 0; row < shape.blocks.length; row++) {
+        for (let col = 0; col < shape.blocks[row].length; col++) {
+            if (shape.blocks[row][col] === 1) {
+                gameState.grid[gridRow + row][gridCol + col] = shape.colorId;
+                blockCount++;
             }
         }
     }
-
-    const clears = findClearedLines();
-    const linesCleared = clears.rowsToClear.length + clears.colsToClear.length;
-    const pointsEarned = calculateScore(blocksCount, linesCleared);
-
+    const { rowsToClear, colsToClear } = findCompletedLines();
+    const linesCleared = rowsToClear.length + colsToClear.length;
+    const pointsEarned = calculateTurnPoints(blockCount, linesCleared);
     return {
         success: true,
         linesCleared,
         pointsEarned,
-        currentCombo: comboStreak,
-        rowsToClear: clears.rowsToClear,
-        colsToClear: clears.colsToClear
+        currentCombo: gameState.comboStreak,
+        rowsToClear,
+        colsToClear
     };
 }
 
-// Feature C: Game Over Detection
-function checkGameOver() {
-    for (const shape of availableShapes) {
+function hasNoRemainingMoves() {
+    for (const shape of gameState.availableShapes) {
         if (!shape) continue;
-        let canFit = false;
-        for (let r = 0; r < GRID_SIZE; r++) {
-            for (let c = 0; c < GRID_SIZE; c++) {
-                if (canPlace(shape, r, c)) { canFit = true; break; }
+        for (let row = 0; row < GRID_SIZE; row++) {
+            for (let col = 0; col < GRID_SIZE; col++) {
+                if (canPlaceShapeAt(shape, row, col)) return false;
             }
-            if (canFit) break;
         }
-        if (canFit) return false;
     }
     return true;
 }
 
 function handleGameOver() {
-    isGameRunning = false;
-    clearUndo();
-    stopBgm();
-
+    gameState.isRunning = false;
+    lockUndo();
+    stopBackgroundMusic();
+    removeSetting('currentGame');
     playGameOverSound();
-
-    if (score > highScore) {
-        highScore = score;
-        localStorage.setItem('block_blast_highscore', highScore);
+    if (gameState.score > highScore) {
+        highScore = gameState.score;
+        saveSetting('highScore', highScore);
         highScoreElement.textContent = formatScore(highScore);
     }
-
-    const modal = document.getElementById('game-over-modal');
-    document.getElementById('modal-best-score').textContent = formatScore(highScore);
-    modal.style.display = 'flex';
-    setTimeout(() => modal.classList.add('active'), 10);
-    // Count the final score up for a small payoff moment
-    animateCountUp(document.getElementById('final-score'), score);
+    modalBestScoreElement.textContent = formatScore(highScore);
+    openModal(gameOverModal);
+    animateScoreCountUp(finalScoreElement, gameState.score);
 }
 
 function finalizeTurn() {
-    const allUsed = availableShapes.every(s => s === null);
-    if (allUsed) {
-        if (!linesClearedThisRound) resetCombo();
-        linesClearedThisRound = false;
-        refillShapes();
+    const trayEmpty = gameState.availableShapes.every(shape => shape === null);
+    if (trayEmpty) {
+        if (!gameState.clearedLineThisRound) gameState.comboStreak = 0;
+        gameState.clearedLineThisRound = false;
+        refillShapeTray();
     }
-
-    if (checkGameOver()) {
+    if (hasNoRemainingMoves()) {
         handleGameOver();
     } else {
-        isGameRunning = true;
+        gameState.isRunning = true;
+        saveGameState();
     }
 }
 
-// ─────────────────────────────────────────────
-// C2: ONE-STEP UNDO
-// Snapshot is captured before a placement; it is only kept when the
-// move cleared no lines. After any clear (or game over) undo is locked.
-// ─────────────────────────────────────────────
-function snapshotState() {
+function captureUndoSnapshot() {
     return {
-        grid: grid.map(row => row.slice()),
-        availableShapes: availableShapes.map(s => s ? {
-            blocks: s.blocks.map(r => r.slice()),
-            colorId: s.colorId,
-            previewCellSize: s.previewCellSize,
-            baseX: s.baseX,
-            baseY: s.baseY
+        grid: gameState.grid.map(row => row.slice()),
+        availableShapes: gameState.availableShapes.map(shape => shape ? {
+            blocks: shape.blocks.map(row => row.slice()),
+            colorId: shape.colorId,
+            previewCellSize: shape.previewCellSize,
+            baseX: shape.baseX,
+            baseY: shape.baseY
         } : null),
-        score: score,
-        comboStreak: comboStreak,
-        linesClearedThisRound: linesClearedThisRound
+        score: gameState.score,
+        comboStreak: gameState.comboStreak,
+        clearedLineThisRound: gameState.clearedLineThisRound
     };
 }
 
-function setUndoEnabled(on) {
+function setUndoEnabled(enabled) {
     if (!undoButton) return;
-    undoButton.disabled = !on;
-    undoButton.classList.toggle('disabled', !on);
+    undoButton.disabled = !enabled;
+    undoButton.classList.toggle('disabled', !enabled);
 }
 
-function clearUndo() {
-    undoState = null;
+function lockUndo() {
+    undoSnapshot = null;
     setUndoEnabled(false);
 }
 
-function performUndo() {
-    if (!undoState) return;
-    grid = undoState.grid.map(r => r.slice());
-    availableShapes = undoState.availableShapes.map(s => s ? {
-        blocks: s.blocks.map(r => r.slice()),
-        colorId: s.colorId,
-        previewCellSize: s.previewCellSize,
-        baseX: s.baseX,
-        baseY: s.baseY
+function undoLastMove() {
+    if (!undoSnapshot) return;
+    gameState.grid = undoSnapshot.grid.map(row => row.slice());
+    gameState.availableShapes = undoSnapshot.availableShapes.map(shape => shape ? {
+        blocks: shape.blocks.map(row => row.slice()),
+        colorId: shape.colorId,
+        previewCellSize: shape.previewCellSize,
+        baseX: shape.baseX,
+        baseY: shape.baseY
     } : null);
-    score = undoState.score;
-    comboStreak = undoState.comboStreak;
-    linesClearedThisRound = undoState.linesClearedThisRound;
+    gameState.score = undoSnapshot.score;
+    gameState.comboStreak = undoSnapshot.comboStreak;
+    gameState.clearedLineThisRound = undoSnapshot.clearedLineThisRound;
     updateScore();
-    clearUndo();
-    isGameRunning = true;
-    drawGame();
+    lockUndo();
+    gameState.isRunning = true;
+    saveGameState();
+    requestRedraw();
 }
 
-// ─────────────────────────────────────────────
-// Animation / feedback triggers
-// ─────────────────────────────────────────────
-function triggerComboAnimation(streak) {
-    const comboDisplay = document.getElementById('combo-display');
+function saveGameState() {
+    saveSetting('currentGame', {
+        grid: gameState.grid,
+        availableShapes: gameState.availableShapes,
+        score: gameState.score,
+        comboStreak: gameState.comboStreak,
+        clearedLineThisRound: gameState.clearedLineThisRound,
+        undoSnapshot
+    });
+}
+
+function restoreSavedGame() {
+    const saved = loadSetting('currentGame', null);
+    if (!saved || !Array.isArray(saved.grid) || saved.grid.length !== GRID_SIZE) return false;
+    if (!Array.isArray(saved.availableShapes)) return false;
+    gameState.grid = saved.grid;
+    gameState.availableShapes = saved.availableShapes;
+    gameState.score = typeof saved.score === 'number' ? saved.score : 0;
+    gameState.comboStreak = typeof saved.comboStreak === 'number' ? saved.comboStreak : 0;
+    gameState.clearedLineThisRound = !!saved.clearedLineThisRound;
+    undoSnapshot = saved.undoSnapshot || null;
+    setUndoEnabled(!!undoSnapshot);
+    updateScore();
+    return true;
+}
+
+function showComboBanner(streak) {
     comboDisplay.textContent = `COMBO x${streak}!`;
     comboDisplay.classList.remove('pop');
     void comboDisplay.offsetWidth;
     comboDisplay.classList.add('pop');
 }
 
-function spawnFloatingText(points) {
+function showFloatingPoints(points) {
     if (points <= 0) return;
-    const container = document.getElementById('floating-text-container');
     const floatingText = document.createElement('span');
     floatingText.textContent = `+${points}`;
     floatingText.classList.add('floating-text');
-    container.appendChild(floatingText);
+    floatingTextContainer.appendChild(floatingText);
     setTimeout(() => floatingText.remove(), 800);
 }
 
-function spawnLineParticles(rows, cols) {
+function spawnClearParticles(rows, cols) {
     const cells = [];
     const seen = new Set();
-
-    rows.forEach(r => {
-        for (let c = 0; c < GRID_SIZE; c++) {
-            const key = `${r}:${c}`;
+    rows.forEach(row => {
+        for (let col = 0; col < GRID_SIZE; col++) {
+            const key = `${row}:${col}`;
             if (!seen.has(key)) {
                 seen.add(key);
-                cells.push({ r, c });
+                cells.push({ row, col });
             }
         }
     });
-
-    cols.forEach(c => {
-        for (let r = 0; r < GRID_SIZE; r++) {
-            const key = `${r}:${c}`;
+    cols.forEach(col => {
+        for (let row = 0; row < GRID_SIZE; row++) {
+            const key = `${row}:${col}`;
             if (!seen.has(key)) {
                 seen.add(key);
-                cells.push({ r, c });
+                cells.push({ row, col });
             }
         }
     });
-
-    cells.forEach(({ r, c }) => {
-        const cellValue = grid[r][c];
+    cells.forEach(({ row, col }) => {
+        const cellValue = gameState.grid[row][col];
         if (!cellValue) return;
-
-        const x = c * CELL_SIZE + CELL_SIZE / 2;
-        const y = r * CELL_SIZE + CELL_SIZE / 2;
+        const originX = col * CELL_SIZE + CELL_SIZE / 2;
+        const originY = row * CELL_SIZE + CELL_SIZE / 2;
         const color = getThemeColor(cellValue);
         const count = 8 + Math.floor(Math.random() * 5);
-
-        for (let i = 0; i < count; i++) {
+        for (let index = 0; index < count; index++) {
             particles.push({
-                x,
-                y,
-                vx: Math.random() * 6 - 3,
-                vy: -5 + Math.random() * 4,
+                x: originX,
+                y: originY,
+                velocityX: Math.random() * 6 - 3,
+                velocityY: -5 + Math.random() * 4,
                 size: 3 + Math.random() * 5,
                 color,
                 alpha: 1,
@@ -422,42 +398,37 @@ function spawnLineParticles(rows, cols) {
     });
 }
 
-function playFlashingEffect(rows, cols) {
-    const gridOverlay = document.getElementById('grid-overlay');
-
-    rows.forEach(r => {
-        for (let c = 0; c < GRID_SIZE; c++) createFlashElement(gridOverlay, r, c);
+function flashClearedLines(rows, cols) {
+    rows.forEach(row => {
+        for (let col = 0; col < GRID_SIZE; col++) appendFlashCell(row, col);
     });
-
-    cols.forEach(c => {
-        for (let r = 0; r < GRID_SIZE; r++) {
-            if (!rows.includes(r)) createFlashElement(gridOverlay, r, c);
+    cols.forEach(col => {
+        for (let row = 0; row < GRID_SIZE; row++) {
+            if (!rows.includes(row)) appendFlashCell(row, col);
         }
     });
 }
 
-function createFlashElement(container, r, c) {
+function appendFlashCell(row, col) {
     const flash = document.createElement('div');
     flash.classList.add('flashing');
-    flash.style.left = `${c * CELL_SIZE + 2}px`;
-    flash.style.top = `${r * CELL_SIZE + 2}px`;
+    flash.style.left = `${col * CELL_SIZE + 2}px`;
+    flash.style.top = `${row * CELL_SIZE + 2}px`;
     flash.style.width = `${CELL_SIZE - 4}px`;
     flash.style.height = `${CELL_SIZE - 4}px`;
-
-    const cellVal = grid[r][c];
-    if (cellVal && cellVal !== 0) {
-        const resolved = getThemeColor(cellVal);
+    const cellValue = gameState.grid[row][col];
+    if (cellValue && cellValue !== 0) {
+        const resolved = getThemeColor(cellValue);
         flash.style.backgroundColor = (resolved === getThemeColor('obstacle')) ? 'white' : resolved;
     } else {
         flash.style.backgroundColor = 'white';
     }
-
-    container.appendChild(flash);
+    gridOverlay.appendChild(flash);
     setTimeout(() => flash.remove(), 250);
 }
 
-function commitLineClears(rows, cols) {
-    rows.forEach(r => { for (let c = 0; c < GRID_SIZE; c++) grid[r][c] = 0; });
-    cols.forEach(c => { for (let r = 0; r < GRID_SIZE; r++) grid[r][c] = 0; });
+function removeCompletedLines(rows, cols) {
+    rows.forEach(row => { for (let col = 0; col < GRID_SIZE; col++) gameState.grid[row][col] = 0; });
+    cols.forEach(col => { for (let row = 0; row < GRID_SIZE; row++) gameState.grid[row][col] = 0; });
     requestRedraw();
 }

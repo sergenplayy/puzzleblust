@@ -1,174 +1,161 @@
-// ─────────────────────────────────────────────
-// INPUT & UI WIRING
-// ─────────────────────────────────────────────
-function getMousePos(evt) {
+function getCanvasPoint(clientX, clientY) {
     const rect = canvas.getBoundingClientRect();
     return {
-        x: (evt.clientX - rect.left) * (canvas.width / rect.width),
-        y: (evt.clientY - rect.top) * (canvas.height / rect.height)
+        x: (clientX - rect.left) * (canvas.width / rect.width),
+        y: (clientY - rect.top) * (canvas.height / rect.height)
     };
 }
 
-function beginDragAt(clientX, clientY) {
-    if (!isGameRunning) return;
-    const pos = getMousePos({ clientX, clientY });
-
-    for (let i = 0; i < availableShapes.length; i++) {
-        const shape = availableShapes[i];
+function startShapeDrag(clientX, clientY) {
+    if (!gameState.isRunning) return;
+    const point = getCanvasPoint(clientX, clientY);
+    for (let index = 0; index < gameState.availableShapes.length; index++) {
+        const shape = gameState.availableShapes[index];
         if (!shape) continue;
-
         const previewCellSize = shape.previewCellSize || SHAPE_PREVIEW_CELL_SIZE;
         const bounds = getShapePixelBounds(shape, previewCellSize);
-
-        if (pos.x >= shape.baseX && pos.x <= shape.baseX + bounds.width &&
-            pos.y >= shape.baseY && pos.y <= shape.baseY + bounds.height) {
-            draggingShapeIndex = i;
-            mouseX = pos.x;
-            mouseY = pos.y;
-            // The tray piece is small (previewCellSize) but is dragged/placed at
-            // full CELL_SIZE — scale the grab offset up so the held cell tracks
-            // the pointer instead of drifting up-left (worse for big/touch pieces).
-            const up = CELL_SIZE / (shape.previewCellSize || SHAPE_PREVIEW_CELL_SIZE);
-            dragOffsetX = (pos.x - shape.baseX) * up;
-            dragOffsetY = (pos.y - shape.baseY) * up + 30 * LAYOUT_SCALE;
-            playDragSound();
+        if (point.x >= shape.baseX && point.x <= shape.baseX + bounds.width &&
+            point.y >= shape.baseY && point.y <= shape.baseY + bounds.height) {
+            const scaleUp = CELL_SIZE / previewCellSize;
+            dragState.shapeIndex = index;
+            dragState.pointerX = point.x;
+            dragState.pointerY = point.y;
+            dragState.offsetX = (point.x - shape.baseX) * scaleUp;
+            dragState.offsetY = (point.y - shape.baseY) * scaleUp + DRAG_LIFT_OFFSET;
+            playPickupSound();
+            requestRedraw();
             break;
         }
     }
 }
 
-function updateDragPosition(clientX, clientY) {
-    if (!isGameRunning || draggingShapeIndex === -1) return;
-    const pos = getMousePos({ clientX, clientY });
-    mouseX = pos.x;
-    mouseY = pos.y;
+function moveShapeDrag(clientX, clientY) {
+    if (!gameState.isRunning || dragState.shapeIndex === -1) return;
+    const point = getCanvasPoint(clientX, clientY);
+    dragState.pointerX = point.x;
+    dragState.pointerY = point.y;
     requestRedraw();
 }
 
-function endDragAt(clientX, clientY) {
-    if (!isGameRunning || draggingShapeIndex === -1) return;
-    updateDragPosition(clientX, clientY);
-
-    const shape = availableShapes[draggingShapeIndex];
+function dropShape(clientX, clientY) {
+    if (!gameState.isRunning || dragState.shapeIndex === -1) return;
+    moveShapeDrag(clientX, clientY);
+    const shape = gameState.availableShapes[dragState.shapeIndex];
     if (!shape) {
-        draggingShapeIndex = -1;
+        dragState.shapeIndex = -1;
         return;
     }
-
-    const dropX = mouseX - dragOffsetX;
-    const dropY = mouseY - dragOffsetY;
-
-    const gridC = Math.round(dropX / CELL_SIZE);
-    const gridR = Math.round(dropY / CELL_SIZE);
-
-    // C2: capture board state BEFORE mutating, in case the move is undoable
-    const preMove = snapshotState();
-
-    const turnResult = placePiece(shape, gridR, gridC);
-
+    const dropX = dragState.pointerX - dragState.offsetX;
+    const dropY = dragState.pointerY - dragState.offsetY;
+    const gridCol = Math.round(dropX / CELL_SIZE);
+    const gridRow = Math.round(dropY / CELL_SIZE);
+    const undoCandidate = captureUndoSnapshot();
+    const turnResult = placeShapeOnGrid(shape, gridRow, gridCol);
     if (turnResult.success) {
-        availableShapes[draggingShapeIndex] = null;
-        spawnFloatingText(turnResult.pointsEarned);
-
+        gameState.availableShapes[dragState.shapeIndex] = null;
+        showFloatingPoints(turnResult.pointsEarned);
         if (turnResult.linesCleared > 0) {
-            // C2: a clearing move cannot be undone — lock the button
-            clearUndo();
-
-            // Play a clear cue on EVERY line break (streak 1–4 -> the combo 1–5
-            // clip), so the first break has sound too.
-            playComboSound(comboStreak);
-
-            // A4: only show the "COMBO x N!" banner for an actual combo (streak ≥ 2)
+            lockUndo();
+            playLineClearCue(turnResult.currentCombo);
             if (turnResult.currentCombo > 1) {
-                triggerComboAnimation(turnResult.currentCombo);
+                showComboBanner(turnResult.currentCombo);
             }
-
-            isGameRunning = false;
-            spawnLineParticles(turnResult.rowsToClear, turnResult.colsToClear);
-            playFlashingEffect(turnResult.rowsToClear, turnResult.colsToClear);
-
+            gameState.isRunning = false;
+            spawnClearParticles(turnResult.rowsToClear, turnResult.colsToClear);
+            flashClearedLines(turnResult.rowsToClear, turnResult.colsToClear);
+            const tokenAtPlacement = gameState.turnToken;
             setTimeout(() => {
-                commitLineClears(turnResult.rowsToClear, turnResult.colsToClear);
-                score += turnResult.pointsEarned;
+                if (tokenAtPlacement !== gameState.turnToken) return;
+                removeCompletedLines(turnResult.rowsToClear, turnResult.colsToClear);
+                gameState.score += turnResult.pointsEarned;
                 updateScore();
                 finalizeTurn();
-            }, 200);
+            }, LINE_CLEAR_COMMIT_DELAY);
         } else {
             playPlaceSound();
-            score += turnResult.pointsEarned;
+            gameState.score += turnResult.pointsEarned;
             updateScore();
-
-            // C2: a non-clearing move is undoable — UNLESS it empties the tray.
-            // Placing the last piece refills with new random shapes that an undo
-            // can't reproduce, so lock undo on the round-ending move.
-            const willRefill = availableShapes.every(s => s === null);
-            if (willRefill) {
-                clearUndo();
+            const trayWillRefill = gameState.availableShapes.every(slot => slot === null);
+            if (trayWillRefill) {
+                lockUndo();
             } else {
-                undoState = preMove;
+                undoSnapshot = undoCandidate;
                 setUndoEnabled(true);
             }
-
             finalizeTurn();
         }
     } else {
         triggerInvalidPlacementFeedback();
     }
-
-    draggingShapeIndex = -1;
+    dragState.shapeIndex = -1;
+    requestRedraw();
 }
 
-canvas.addEventListener('mousedown', (e) => {
-    beginDragAt(e.clientX, e.clientY);
+canvas.addEventListener('mousedown', event => {
+    startShapeDrag(event.clientX, event.clientY);
 });
 
-window.addEventListener('mousemove', (e) => {
-    updateDragPosition(e.clientX, e.clientY);
+window.addEventListener('mousemove', event => {
+    moveShapeDrag(event.clientX, event.clientY);
 });
 
-window.addEventListener('mouseup', (e) => {
-    endDragAt(e.clientX, e.clientY);
+window.addEventListener('mouseup', event => {
+    dropShape(event.clientX, event.clientY);
 });
 
-// Touch support (mobile)
-canvas.addEventListener('touchstart', (e) => {
-    e.preventDefault();
-    const touch = e.touches[0];
-    beginDragAt(touch.clientX, touch.clientY);
+canvas.addEventListener('touchstart', event => {
+    event.preventDefault();
+    const touch = event.touches[0];
+    startShapeDrag(touch.clientX, touch.clientY);
 }, { passive: false });
 
-window.addEventListener('touchmove', (e) => {
-    if (draggingShapeIndex === -1) return;
-    e.preventDefault();
-    const touch = e.touches[0];
-    updateDragPosition(touch.clientX, touch.clientY);
+window.addEventListener('touchmove', event => {
+    if (dragState.shapeIndex === -1) return;
+    event.preventDefault();
+    const touch = event.touches[0];
+    moveShapeDrag(touch.clientX, touch.clientY);
 }, { passive: false });
 
-window.addEventListener('touchend', (e) => {
-    if (draggingShapeIndex === -1) return;
-    e.preventDefault();
-    const touch = e.changedTouches[0];
-    endDragAt(touch.clientX, touch.clientY);
+window.addEventListener('touchend', event => {
+    if (dragState.shapeIndex === -1) return;
+    event.preventDefault();
+    const touch = event.changedTouches[0];
+    dropShape(touch.clientX, touch.clientY);
 }, { passive: false });
 
-window.addEventListener('touchcancel', (e) => {
-    if (draggingShapeIndex === -1) return;
-    e.preventDefault();
-    const touch = e.changedTouches[0];
-    if (touch) endDragAt(touch.clientX, touch.clientY);
-    else draggingShapeIndex = -1;
+window.addEventListener('touchcancel', event => {
+    if (dragState.shapeIndex === -1) return;
+    event.preventDefault();
+    const touch = event.changedTouches[0];
+    if (touch) dropShape(touch.clientX, touch.clientY);
+    else dragState.shapeIndex = -1;
 }, { passive: false });
 
-// ─────────────────────────────────────────────
-// SKIN PICKER UI — cards built into the dedicated #skin-modal
-// ─────────────────────────────────────────────
-const skinModal = document.getElementById('skin-modal');
-const skinBack = document.getElementById('skin-back');
+const modalTransitionTimers = new WeakMap();
 
-(function injectSkinSelectorUI() {
+function clearModalTransition(modal) {
+    const pending = modalTransitionTimers.get(modal);
+    if (pending) clearTimeout(pending);
+}
+
+function openModal(modal) {
+    clearModalTransition(modal);
+    modal.style.display = 'flex';
+    modalTransitionTimers.set(modal, setTimeout(() => modal.classList.add('active'), 10));
+}
+
+function closeModal(modal, afterClose) {
+    clearModalTransition(modal);
+    modal.classList.remove('active');
+    modalTransitionTimers.set(modal, setTimeout(() => {
+        modal.style.display = 'none';
+        if (afterClose) afterClose();
+    }, 300));
+}
+
+function buildSkinPicker() {
     const container = document.getElementById('skin-options');
     if (!container) return;
-
     const skins = [
         { id: 'default',   label: 'Light'     },
         { id: 'neon',      label: 'Neon'      },
@@ -176,39 +163,53 @@ const skinBack = document.getElementById('skin-back');
         { id: 'wooden',    label: 'Wooden'    },
         { id: 'minecraft', label: 'Minecraft' }
     ];
-
     skins.forEach(({ id, label }) => {
-        const pal = SKIN_PALETTES[id] || {};
+        const palette = SKIN_PALETTES[id] || {};
         const card = document.createElement('button');
-        card.className = 'skin-option-btn';   // keep class so switchSkin() syncs .active
+        card.className = 'skin-option-btn';
         card.dataset.skin = id;
         if (id === currentSkin) card.classList.add('active');
-
         const preview = document.createElement('div');
         preview.className = 'skin-card-preview';
-        preview.style.background = pal.gridBg || '#eee';
-        ['orange', 'green', 'blue', 'magenta'].forEach(k => {
-            const sw = document.createElement('span');
-            sw.className = 'skin-sw';
-            sw.style.background = pal[k] || '#999';
-            preview.appendChild(sw);
+        preview.style.background = palette.gridBg || '#eee';
+        ['orange', 'green', 'blue', 'magenta'].forEach(colorId => {
+            const swatch = document.createElement('span');
+            swatch.className = 'skin-sw';
+            swatch.style.background = palette[colorId] || '#999';
+            preview.appendChild(swatch);
         });
-
         const name = document.createElement('div');
         name.className = 'skin-card-name';
         name.textContent = label;
-
         card.appendChild(preview);
         card.appendChild(name);
         card.addEventListener('click', () => switchSkin(id));
         container.appendChild(card);
     });
-})();
+}
 
-// ─────────────────────────────────────────────
-// BUTTON & MODAL WIRING
-// ─────────────────────────────────────────────
-playButton.addEventListener('click', () => {
+buildSkinPicker();
+
+function updatePlayLabel() {
+    const playLabel = playButton.querySelector('.play-label') || playButton;
+    const hasGameInProgress = gameState.score > 0 || gameState.availableShapes.some(shape => shape !== null);
+    playLabel.textContent = hasGameInProgress ? 'Resume' : 'Start playing';
+}
+
+function returnToMainMenu() {
+    updatePlayLabel();
+    gameState.isRunning = false;
+    gameState.turnToken++;
+    stopBackgroundMusic();
+    gameScreen.classList.remove('active');
+    setTimeout(() => {
+        gameScreen.style.display = 'none';
+        mainMenu.style.display = 'flex';
+        setTimeout(() => mainMenu.classList.add('active'), 50);
+    }, 500);
+}
+
+function enterGameScreen() {
     mainMenu.classList.remove('active');
     setTimeout(() => {
         mainMenu.style.display = 'none';
@@ -218,156 +219,97 @@ playButton.addEventListener('click', () => {
             startGame();
         }, 50);
     }, 500);
+}
+
+playButton.addEventListener('click', enterGameScreen);
+
+document.querySelectorAll('.js-play').forEach(button => {
+    button.addEventListener('click', enterGameScreen);
 });
 
 backButton.addEventListener('click', () => {
-    settingsModal.style.display = 'flex';
-    setTimeout(() => settingsModal.classList.add('active'), 10);
-    isGameRunning = false;
-    refreshBgm();
+    openModal(settingsModal);
+    gameState.isRunning = false;
+    syncBackgroundMusic();
 });
 
 settingsClose.addEventListener('click', () => {
-    settingsModal.classList.remove('active');
-    setTimeout(() => {
-        settingsModal.style.display = 'none';
-        if (score > 0 || availableShapes.some(s => s !== null)) {
-            isGameRunning = true;
+    closeModal(settingsModal, () => {
+        if (gameState.score > 0 || gameState.availableShapes.some(shape => shape !== null)) {
+            gameState.isRunning = true;
         }
-        refreshBgm();
-    }, 300);
+        syncBackgroundMusic();
+    });
 });
 
-// Wire volume slider on page load
-(function initVolumeSlider() {
-    const slider = document.getElementById('volumeSlider');
-    if (!slider) return;
-    slider.value = gameVolume;
-    slider.addEventListener('input', () => {
-        gameVolume = parseFloat(slider.value);
-        localStorage.setItem('gameVolume', gameVolume);
-        updateBgmVolume();
-    });
-})();
+volumeSlider.value = settings.volume;
+volumeSlider.addEventListener('input', () => {
+    setMasterVolume(parseFloat(volumeSlider.value));
+});
 
 toggleSound.addEventListener('click', () => {
-    isSoundEnabled = !isSoundEnabled;
-    localStorage.setItem('bb_sound', isSoundEnabled ? '1' : '0');
-    toggleSound.classList.toggle('active', isSoundEnabled);
+    settings.soundEnabled = !settings.soundEnabled;
+    saveSetting('soundEnabled', settings.soundEnabled);
+    toggleSound.classList.toggle('active', settings.soundEnabled);
 });
 
-toggleBgm.addEventListener('click', () => {
-    isMusicEnabled = !isMusicEnabled;
-    localStorage.setItem('bb_music', isMusicEnabled ? '1' : '0');
-    toggleBgm.classList.toggle('active', isMusicEnabled);
-    refreshBgm();
+toggleMusic.addEventListener('click', () => {
+    settings.musicEnabled = !settings.musicEnabled;
+    saveSetting('musicEnabled', settings.musicEnabled);
+    toggleMusic.classList.toggle('active', settings.musicEnabled);
+    syncBackgroundMusic();
 });
 
-toggleVibe.addEventListener('click', () => {
-    isVibrationEnabled = !isVibrationEnabled;
-    localStorage.setItem('bb_vibe', isVibrationEnabled ? '1' : '0');
-    toggleVibe.classList.toggle('active', isVibrationEnabled);
+toggleVibration.addEventListener('click', () => {
+    settings.vibrationEnabled = !settings.vibrationEnabled;
+    saveSetting('vibrationEnabled', settings.vibrationEnabled);
+    toggleVibration.classList.toggle('active', settings.vibrationEnabled);
 });
-
-// Shared "go back to the landing menu" transition (preserves the game so
-// the menu shows Resume). Reused by Settings → Home and the brand click.
-function returnToMainMenu() {
-    const playLabel = playButton.querySelector('.play-label') || playButton;
-    if (score > 0 || availableShapes.some(s => s !== null)) {
-        playLabel.textContent = 'Resume';
-    } else {
-        playLabel.textContent = 'Start playing';
-    }
-    isGameRunning = false;
-    stopBgm();
-    gameScreen.classList.remove('active');
-    setTimeout(() => {
-        gameScreen.style.display = 'none';
-        mainMenu.style.display = 'flex';
-        setTimeout(() => mainMenu.classList.add('active'), 50);
-    }, 500);
-}
 
 settingsHome.addEventListener('click', () => {
-    settingsModal.classList.remove('active');
-    setTimeout(() => {
-        settingsModal.style.display = 'none';
-        returnToMainMenu();
-    }, 300);
-});
-
-// Clickable PuzzleBlast brand: in-game → main menu; on the menu → scroll to top
-document.querySelectorAll('.brand').forEach(brand => {
-    const inGame = !!brand.closest('#game-screen');
-    const activate = () => {
-        if (inGame) returnToMainMenu();
-        else window.scrollTo({ top: 0, behavior: 'smooth' });
-    };
-    brand.addEventListener('click', activate);
-    brand.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); activate(); }
-    });
+    closeModal(settingsModal, returnToMainMenu);
 });
 
 settingsReplay.addEventListener('click', () => {
-    settingsModal.classList.remove('active');
-    setTimeout(() => {
-        settingsModal.style.display = 'none';
-        startGame(true);
-    }, 300);
+    closeModal(settingsModal, () => startGame(true));
 });
 
-// "Change Skin" opens the dedicated skin modal from Settings
-if (themeSwitcherBtn && skinModal) {
-    themeSwitcherBtn.addEventListener('click', () => {
-        settingsModal.classList.remove('active');
-        setTimeout(() => {
-            settingsModal.style.display = 'none';
-            skinModal.style.display = 'flex';
-            setTimeout(() => skinModal.classList.add('active'), 10);
-        }, 300);
-    });
-}
+changeSkinButton.addEventListener('click', () => {
+    closeModal(settingsModal, () => openModal(skinModal));
+});
 
-// Back/return from the skin modal to Settings
-if (skinBack && skinModal) {
-    skinBack.addEventListener('click', () => {
-        skinModal.classList.remove('active');
-        setTimeout(() => {
-            skinModal.style.display = 'none';
-            settingsModal.style.display = 'flex';
-            setTimeout(() => settingsModal.classList.add('active'), 10);
-        }, 300);
-    });
-}
+skinBackButton.addEventListener('click', () => {
+    closeModal(skinModal, () => openModal(settingsModal));
+});
 
 restartButton.addEventListener('click', () => {
-    const modal = document.getElementById('game-over-modal');
-    modal.classList.remove('active');
-    setTimeout(() => {
-        modal.style.display = 'none';
-        startGame(true);
-    }, 400);
+    closeModal(gameOverModal, () => startGame(true));
 });
 
-// C2: undo button
-if (undoButton) {
-    undoButton.addEventListener('click', () => {
-        if (undoButton.disabled) return;
-        performUndo();
+undoButton.addEventListener('click', () => {
+    if (undoButton.disabled) return;
+    undoLastMove();
+});
+
+document.querySelectorAll('.brand').forEach(brand => {
+    const insideGame = !!brand.closest('#game-screen');
+    const activate = () => {
+        if (insideGame) returnToMainMenu();
+        else window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+    brand.addEventListener('click', activate);
+    brand.addEventListener('keydown', event => {
+        if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            activate();
+        }
     });
-}
+});
 
-// ─────────────────────────────────────────────
-// INITIALISATION
-// ─────────────────────────────────────────────
-// A2: reflect persisted audio prefs on the settings toggles
-toggleSound.classList.toggle('active', isSoundEnabled);
-toggleBgm.classList.toggle('active', isMusicEnabled);
-toggleVibe.classList.toggle('active', isVibrationEnabled);
-
-// Undo starts locked
+toggleSound.classList.toggle('active', settings.soundEnabled);
+toggleMusic.classList.toggle('active', settings.musicEnabled);
+toggleVibration.classList.toggle('active', settings.vibrationEnabled);
 setUndoEnabled(false);
-
-// Apply persisted skin (sets palette + CSS chrome + first draw)
+restoreSavedGame();
+updatePlayLabel();
 switchSkin(currentSkin);

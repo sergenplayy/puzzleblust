@@ -38,7 +38,7 @@ const SKIN_PALETTES = {
         emptyBorder: 'rgba(70, 210, 240, 0.20)', // thin neon edge
         separator:'rgba(69, 162, 158, 0.4)'
     },
-    // RETRO theme — dark matte "device", recessed empty sockets, brick blocks
+    // RETRO theme — LIGHT lego baseplate, colorful studded blocks
     lego: {
         green:    '#4B9F3F',
         blue:     '#0050A0',
@@ -48,12 +48,12 @@ const SKIN_PALETTES = {
         cyan:     '#00A3DA',
         magenta:  '#D3359D',
         red:      '#E60012',
-        obstacle: '#5a6e7a',
-        gridBg:   '#202a33',        // dark matte device body
-        panelBg:  '#161d24',
-        emptyCell:'#2b3742',        // recessed matte socket
-        emptyBorder: 'rgba(0, 0, 0, 0.35)', // subtle inset edge
-        separator:'rgba(255, 255, 255, 0.12)'
+        obstacle: '#8a97a3',
+        gridBg:   '#c4c9ce',        // neutral grey baseplate
+        panelBg:  '#a9afb5',
+        emptyCell:'#bcc2c8',        // grey socket (opaque, readable)
+        emptyBorder: 'rgba(0, 0, 0, 0.16)',
+        separator:'rgba(0, 0, 0, 0.12)'
     },
     // WOODEN theme — beech-style blocks; 8 distinct wood/stain tones on a wood board
     wooden: {
@@ -71,16 +71,34 @@ const SKIN_PALETTES = {
         emptyCell:'#a47d56',        // slightly darker recessed slot
         emptyBorder: 'rgba(0, 0, 0, 0.15)',
         separator:'rgba(0, 0, 0, 0.18)'
+    },
+    // MINECRAFT theme — ore/block colours on a stone board (canvas-approximated)
+    minecraft: {
+        green:    '#17c06a',        // emerald block
+        blue:     '#1f49b0',        // lapis block
+        yellow:   '#f7d343',        // gold block
+        orange:   '#c0734a',        // copper block
+        purple:   '#8d5fc4',        // amethyst block
+        magenta:  '#ab5fa8',        // purpur block
+        cyan:     '#6fd8d2',        // diamond block
+        red:      '#c01f1f',        // redstone block
+        obstacle: '#6f6f6f',        // stone
+        gridBg:   '#8c8c8c',        // stone board
+        panelBg:  '#6e6e6e',
+        emptyCell:'#7e7e7e',        // recessed stone slot
+        emptyBorder: 'rgba(0, 0, 0, 0.25)',
+        separator:'rgba(0, 0, 0, 0.2)'
     }
 };
 
 // Per-skin styling for the surrounding chrome (board frame + score text).
 // Keeps the CSS board/score in sync with the canvas palette above.
 const SKIN_CHROME = {
-    default: { scoreInk: '#21314f', scoreGlow: '0 2px 6px rgba(40,60,100,0.18)' },
-    neon:    { scoreInk: '#ffffff', scoreGlow: '0 0 14px rgba(102,252,241,0.55)' },
-    lego:    { scoreInk: '#ffffff', scoreGlow: '0 2px 6px rgba(0,0,0,0.45)' },
-    wooden:  { scoreInk: '#3a2618', scoreGlow: '0 2px 6px rgba(60,40,20,0.35)' }
+    default:   { scoreInk: '#21314f', scoreGlow: '0 2px 6px rgba(40,60,100,0.18)' },
+    neon:      { scoreInk: '#ffffff', scoreGlow: '0 0 14px rgba(102,252,241,0.55)' },
+    lego:      { scoreInk: '#1c2530', scoreGlow: '0 2px 5px rgba(0,0,0,0.25)' },
+    wooden:    { scoreInk: '#3a2618', scoreGlow: '0 2px 6px rgba(60,40,20,0.35)' },
+    minecraft: { scoreInk: '#ffffff', scoreGlow: '0 2px 5px rgba(0,0,0,0.7)' }
 };
 
 function getThemeColor(colorId) {
@@ -120,8 +138,8 @@ function hslToHex(h, s, l) {
 
 function getRandomBlockColorId() {
     const themeColorIds = ['green', 'blue', 'yellow', 'orange', 'purple', 'cyan', 'magenta', 'red'];
-    // Wooden skin must stay all-wood — never inject a random off-palette hex.
-    const allowRandom = currentSkin !== 'wooden';
+    // Wooden & Minecraft must stay on-theme — never inject a random off-palette hex.
+    const allowRandom = currentSkin !== 'wooden' && currentSkin !== 'minecraft';
     return (allowRandom && Math.random() >= 0.75)
         ? randomHexColor()
         : themeColorIds[Math.floor(Math.random() * themeColorIds.length)];
@@ -161,7 +179,7 @@ function switchSkin(skinName) {
     localStorage.setItem('selectedSkin', skinName);
 
     // Body class kept for any CSS that keys off the active skin
-    document.body.classList.remove('theme-default', 'theme-neon', 'theme-lego', 'theme-wooden');
+    document.body.classList.remove('theme-default', 'theme-neon', 'theme-lego', 'theme-wooden', 'theme-minecraft');
     document.body.classList.add('theme-' + skinName);
 
     // Drive the board frame + score colour from the palette
@@ -172,6 +190,6 @@ function switchSkin(skinName) {
         btn.classList.toggle('active', btn.dataset.skin === skinName);
     });
 
-    // Redraw immediately so the board updates without a page reload
-    if (typeof drawGame === 'function') drawGame();
+    // Flag a redraw so the board updates on the next frame
+    if (typeof requestRedraw === 'function') requestRedraw();
 }

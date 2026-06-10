@@ -441,14 +441,11 @@ body.theme-neon #game-screen::before {
     opacity: 0.4;
 }
 
-/* RETRO — lego stud baseplate (blue), dimmed */
+/* RETRO — real colorful lego brick photo (light), softened slightly */
 body.theme-lego #game-screen {
-    background-color: #2f6fb0;
-    background-image:
-        radial-gradient(circle at 50% 40%, rgba(255, 255, 255, 0.30) 0 28%, transparent 31%),
-        radial-gradient(circle at 50% 60%, rgba(0, 0, 0, 0.20) 0 31%, transparent 34%),
-        linear-gradient(180deg, rgba(0, 0, 0, 0.20), rgba(0, 0, 0, 0.34));
-    background-size: 50px 50px, 50px 50px, 100% 100%;
+    background:
+        linear-gradient(rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.14)),
+        url('bg/legobg.jpg') center / cover no-repeat fixed;
 }
 
 /* WOODEN — horizontal planks + faint grain */
@@ -460,9 +457,18 @@ body.theme-wooden #game-screen {
         linear-gradient(180deg, #c8a376, #b6885a);
 }
 
-/* Per-skin in-game top-bar surface (menu bar stays light) */
+/* MINECRAFT — grey stone texture, slightly dimmed, pixelated */
+body.theme-minecraft #game-screen {
+    background:
+        linear-gradient(rgba(0, 0, 0, 0.22), rgba(0, 0, 0, 0.22)),
+        url('bg/minecraftbg.jpg') center / cover no-repeat fixed;
+    image-rendering: pixelated;
+}
+
+/* Per-skin in-game top-bar surface (menu bar stays light).
+   Dark skins (neon, minecraft) get a dark bar; lego now uses the light base. */
 body.theme-neon #game-screen .topbar,
-body.theme-lego #game-screen .topbar {
+body.theme-minecraft #game-screen .topbar {
     background: rgba(13, 20, 34, 0.55);
     border-bottom-color: rgba(255, 255, 255, 0.08);
 }
@@ -473,15 +479,15 @@ body.theme-wooden #game-screen .topbar {
 
 /* Light-up the in-game header text on dark skins for legibility */
 body.theme-neon .game-topbar .name,
-body.theme-lego .game-topbar .name { color: #eef3f8; }
+body.theme-minecraft .game-topbar .name { color: #eef3f8; }
 body.theme-neon .game-topbar .navlink,
-body.theme-lego .game-topbar .navlink { color: #93a6ba; }
+body.theme-minecraft .game-topbar .navlink { color: #93a6ba; }
 body.theme-neon .game-topbar .navlink:hover,
 body.theme-neon .game-topbar .navlink.is-active,
-body.theme-lego .game-topbar .navlink:hover,
-body.theme-lego .game-topbar .navlink.is-active { color: #eef3f8; }
+body.theme-minecraft .game-topbar .navlink:hover,
+body.theme-minecraft .game-topbar .navlink.is-active { color: #eef3f8; }
 body.theme-neon .game-topbar .avatar,
-body.theme-lego .game-topbar .avatar { background: var(--m-accent); }
+body.theme-minecraft .game-topbar .avatar { background: var(--m-accent); }
 
 /* Wooden skin: warm brown header text on the light wood background */
 body.theme-wooden .game-topbar .name { color: #3a2618; }
@@ -521,7 +527,14 @@ body.theme-wooden .game-topbar .avatar { background: #7a5a3a; }
     /* Drop the legacy -170px lift / 1.2 scale — it now sits on its own row. */
     margin-top: 0;
     transform: none;
+    /* Contrast chip so the score stays readable on busy backgrounds */
+    background: rgba(255, 255, 255, 0.6);
+    box-shadow: 0 2px 8px -4px rgba(0, 0, 0, 0.3);
 }
+/* Dark-background skins get a dark chip + warm/light text */
+body.theme-neon .best-score-container { background: rgba(10, 16, 30, 0.5); }
+body.theme-wooden .best-score-container { background: rgba(58, 38, 24, 0.62); color: #ffe0b0; }
+body.theme-minecraft .best-score-container { background: rgba(20, 20, 20, 0.55); color: #ffd56b; }
 
 #score {
     font-size: 81px;
@@ -574,6 +587,7 @@ body.theme-wooden .game-topbar .avatar { background: #7a5a3a; }
     border: 6px solid var(--board-frame);
     box-shadow: 0 40px 70px -36px rgba(120, 70, 50, 0.5);
 }
+
 
 #grid-overlay {
     top: 0;
@@ -641,23 +655,104 @@ body.theme-wooden .game-topbar .avatar { background: #7a5a3a; }
 .settings-card {
     background: var(--m-card);
     color: var(--m-ink);
+    width: 360px;
+    padding: 22px;
+    border-radius: 22px;
+    gap: 18px;
     box-shadow: 0 30px 60px -30px rgba(120, 70, 50, 0.6);
 }
 .settings-header { color: var(--m-ink); border-bottom-color: var(--m-card-line); }
-.close-button { color: var(--m-ink-mut); }
+.close-button { color: var(--m-ink-mut); font-size: 28px; line-height: 1; }
+.close-button:hover { color: var(--m-ink); }
 
-.icon-button {
+/* ---- Settings sections + toggle switches (redesign) ---- */
+.settings-section { display: flex; flex-direction: column; gap: 10px; }
+.section-label {
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+    color: var(--m-ink-mut);
+}
+.toggle-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    padding: 11px 14px;
+    border-radius: 14px;
+    border: 1px solid var(--m-card-line);
+    background: var(--m-cream);
+    color: var(--m-ink);
+    font-family: inherit;
+    font-size: 16px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.18s ease, border-color 0.18s ease;
+}
+.toggle-row:hover { border-color: #d8c1b1; }
+.toggle-row .t-ico { font-size: 20px; line-height: 1; }
+.toggle-row .t-label { flex: 1; text-align: left; }
+.toggle-row .switch {
+    width: 46px;
+    height: 27px;
+    border-radius: 999px;
+    background: #cdd5df;
+    position: relative;
+    flex-shrink: 0;
+    transition: background 0.2s ease;
+}
+.toggle-row .switch::after {
+    content: '';
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 21px;
+    height: 21px;
+    border-radius: 50%;
+    background: #fff;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+    transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.toggle-row.active .switch { background: var(--m-accent); }
+.toggle-row.active .switch::after { transform: translateX(19px); }
+
+/* ---- Settings action buttons ---- */
+.settings-action {
+    width: 100%;
+    padding: 14px;
+    border: none;
+    border-radius: 14px;
+    background: var(--m-ink);
+    color: #fff;
+    font-family: inherit;
+    font-size: 16px;
+    font-weight: 800;
+    cursor: pointer;
+    transition: transform 0.12s ease, filter 0.18s ease;
+}
+.settings-action:hover { filter: brightness(1.08); }
+.settings-action:active { transform: scale(0.98); }
+.settings-actions-row { display: flex; gap: 10px; }
+.settings-actions-row .settings-action { flex: 1; }
+.settings-action.ghost {
     background: var(--m-cream);
     color: var(--m-ink);
     border: 1px solid var(--m-card-line);
 }
-.list-button {
-    background: var(--m-cream);
-    color: var(--m-ink);
-    border: 1px solid var(--m-card-line);
+
+/* ---- Smooth pop for the modals ---- */
+.modal-overlay .settings-card,
+.modal-overlay .game-over-card {
+    opacity: 0;
+    transform: scale(0.92) translateY(10px);
+    transition: opacity 0.25s ease, transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
-.list-button.highlight-green { background: var(--m-accent); color: #fff; border: none; }
-.theme-button { background: var(--m-ink); color: #fff; }
+.modal-overlay.active .settings-card,
+.modal-overlay.active .game-over-card {
+    opacity: 1;
+    transform: none;
+}
 
 .volume-label { color: var(--m-ink); }
 .volume-slider { background: #efdfd1; }

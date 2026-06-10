@@ -7,7 +7,7 @@
     <title>Block Blast</title>
     <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;700&family=Baloo+2:wght@500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
-    <link rel="stylesheet" href="modern.css?v=6">
+    <link rel="stylesheet" href="modern.css?v=9">
 </head>
 <body>
     <!-- Main Menu Screen (Clean Modern landing) -->
@@ -166,38 +166,34 @@
         <div class="settings-card">
             <div class="settings-header">
                 <h2>Settings</h2>
-                <button id="settings-close" class="close-button">X</button>
+                <button id="settings-close" class="close-button" aria-label="Close">×</button>
             </div>
-            
-            <div class="settings-top-row">
-                <button id="toggle-sound" class="icon-button active">
-                    <span class="icon">🔊</span>
-                    <span>Sound</span>
+
+            <div class="settings-section">
+                <div class="section-label">Audio</div>
+                <button id="toggle-sound" class="toggle-row active">
+                    <span class="t-ico">🔊</span><span class="t-label">Sound</span><span class="switch"></span>
                 </button>
-                <button id="toggle-bgm" class="icon-button">
-                    <span class="icon">🎵</span>
-                    <span>BGM</span>
+                <button id="toggle-bgm" class="toggle-row">
+                    <span class="t-ico">🎵</span><span class="t-label">Music</span><span class="switch"></span>
                 </button>
-                <button id="toggle-vibe" class="icon-button active">
-                    <span class="icon">📳</span>
-                    <span>Vibration</span>
+                <button id="toggle-vibe" class="toggle-row active">
+                    <span class="t-ico">📳</span><span class="t-label">Vibration</span><span class="switch"></span>
                 </button>
+                <div class="volume-row">
+                    <label for="volumeSlider" class="volume-label">🔉 Volume</label>
+                    <input type="range" id="volumeSlider" min="0" max="1" step="0.1" value="0.8" class="volume-slider">
+                </div>
             </div>
-            
-            <!-- Volume Slider -->
-            <div class="volume-row">
-                <label for="volumeSlider" class="volume-label">🔉 Volume</label>
-                <input type="range" id="volumeSlider" min="0" max="1" step="0.1" value="0.8" class="volume-slider">
+
+            <div class="settings-section">
+                <div class="section-label">Game</div>
+                <button id="theme-switcher-btn" class="settings-action">🎨 Change Skin</button>
+                <div class="settings-actions-row">
+                    <button id="settings-home" class="settings-action ghost">🏠 Home</button>
+                    <button id="settings-replay" class="settings-action ghost">🔄 Replay</button>
+                </div>
             </div>
-            
-            <div class="settings-list">
-                <button class="list-button">More Games</button>
-                <button class="list-button">More Settings</button>
-                <button id="settings-home" class="list-button highlight-green">🏠 Home</button>
-                <button id="settings-replay" class="list-button highlight-green">🔄 Replay</button>
-            </div>
-            
-            <button id="theme-switcher-btn" class="theme-button">🎨 Change Skin</button>
         </div>
     </div>
 
@@ -233,13 +229,13 @@
         </div>
     </div>
 
-    <script src="js/config.js?v=4"></script>
-    <script src="js/palette.js?v=5"></script>
-    <script src="js/state.js?v=4"></script>
-    <script src="js/audio.js?v=4"></script>
-    <script src="js/render.js?v=4"></script>
-    <script src="js/core.js?v=4"></script>
-    <script src="js/input.js?v=5"></script>
+    <script src="js/config.js?v=9"></script>
+    <script src="js/palette.js?v=9"></script>
+    <script src="js/state.js?v=9"></script>
+    <script src="js/audio.js?v=9"></script>
+    <script src="js/render.js?v=9"></script>
+    <script src="js/core.js?v=9"></script>
+    <script src="js/input.js?v=9"></script>
     <script>
         // Let the topbar "Play now" and hero "Today's puzzle" buttons
         // start the game via the same handler as the primary play button.

@@ -42,6 +42,7 @@ function updateDragPosition(clientX, clientY) {
     const pos = getMousePos({ clientX, clientY });
     mouseX = pos.x;
     mouseY = pos.y;
+    requestRedraw();
 }
 
 function endDragAt(clientX, clientY) {
@@ -169,10 +170,11 @@ const skinBack = document.getElementById('skin-back');
     if (!container) return;
 
     const skins = [
-        { id: 'default', label: 'Light'  },
-        { id: 'neon',    label: 'Neon'   },
-        { id: 'lego',    label: 'Retro'  },
-        { id: 'wooden',  label: 'Wooden' }
+        { id: 'default',   label: 'Light'     },
+        { id: 'neon',      label: 'Neon'      },
+        { id: 'lego',      label: 'Retro'     },
+        { id: 'wooden',    label: 'Wooden'    },
+        { id: 'minecraft', label: 'Minecraft' }
     ];
 
     skins.forEach(({ id, label }) => {

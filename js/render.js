@@ -52,6 +52,9 @@ function drawTile(ctx2d, x, y, size, colorId, isGhost = false) {
         case 'wooden':
             _drawWoodenTile(ctx2d, x, y, size, hexColor, hexColor === obstacleHex);
             break;
+        case 'minecraft':
+            _drawMinecraftTile(ctx2d, x, y, size, colorId, hexColor, hexColor === obstacleHex);
+            break;
         case 'default':
         default:
             _drawDefaultTile(ctx2d, x, y, size, hexColor, hexColor === obstacleHex);
@@ -68,10 +71,14 @@ function _drawEmptyCell(ctx2d, x, y, size) {
     const fill = getThemeColor('emptyCell');
     const border = getThemeColor('emptyBorder');
 
-    ctx2d.fillStyle = fill;
-    ctx2d.beginPath();
-    ctx2d.roundRect(x + 1, y + 1, size - 2, size - 2, 8);
-    ctx2d.fill();
+    // A 'transparent'/'none' fill lets the in-game background show through the
+    // board (used by the Lego skin so the lego photo is fully visible).
+    if (fill && fill !== 'transparent' && fill !== 'none') {
+        ctx2d.fillStyle = fill;
+        ctx2d.beginPath();
+        ctx2d.roundRect(x + 1, y + 1, size - 2, size - 2, 8);
+        ctx2d.fill();
+    }
 
     if (border && border !== 'none') {
         ctx2d.strokeStyle = border;
@@ -296,6 +303,81 @@ function _drawWoodenTile(ctx2d, x, y, size, hexColor, isObstacle) {
     ctx2d.stroke();
 }
 
+// ── MINECRAFT: real 16×16 block textures (crisp), with a flat-colour fallback ─
+// colorId → texture file in blocks/
+const MC_TEX = {
+    green:    'emerald_block',
+    blue:     'lapis_block',
+    yellow:   'gold_block',
+    orange:   'copper_block',
+    purple:   'amethyst_block',
+    magenta:  'purpur_block',
+    cyan:     'diamond_block',
+    red:      'redstone_block',
+    obstacle: 'stone'
+};
+const mcImages = {};
+function preloadMinecraftTextures() {
+    for (const name of new Set(Object.values(MC_TEX))) {
+        if (mcImages[name]) continue;
+        const img = new Image();
+        img.src = 'blocks/' + name + '.png';
+        mcImages[name] = img;
+    }
+}
+preloadMinecraftTextures();
+
+function _drawMinecraftTile(ctx2d, x, y, size, colorId, hexColor, isObstacle) {
+    const ix = x + 1, iy = y + 1, s = size - 2;
+
+    // Preferred path: draw the real block texture, crisp (nearest-neighbour)
+    const tex = mcImages[MC_TEX[colorId]];
+    if (tex && tex.complete && tex.naturalWidth > 0) {
+        const prevSmooth = ctx2d.imageSmoothingEnabled;
+        ctx2d.imageSmoothingEnabled = false;
+        ctx2d.drawImage(tex, ix, iy, s, s);
+        ctx2d.imageSmoothingEnabled = prevSmooth;
+        ctx2d.strokeStyle = 'rgba(0,0,0,0.30)';
+        ctx2d.lineWidth = 1;
+        ctx2d.strokeRect(ix + 0.5, iy + 0.5, s - 1, s - 1);
+        return;
+    }
+
+    // Fallback: flat-colour pixel block (texture not loaded / missing)
+    // Base face
+    ctx2d.fillStyle = hexColor;
+    ctx2d.fillRect(ix, iy, s, s);
+
+    // Ore speckles on a 4×4 sub-grid, seeded from the cell so they never flicker
+    const n = 4;
+    const cw = s / n;
+    const seed = (Math.round(x) * 73856093) ^ (Math.round(y) * 19349663);
+    for (let r = 0; r < n; r++) {
+        for (let c = 0; c < n; c++) {
+            const h = (seed + r * 374761393 + c * 668265263) >>> 0;
+            const v = h % 7;
+            if (v === 0) ctx2d.fillStyle = 'rgba(255,255,255,0.16)';
+            else if (v === 1) ctx2d.fillStyle = 'rgba(0,0,0,0.16)';
+            else continue;
+            ctx2d.fillRect(ix + c * cw, iy + r * cw, Math.ceil(cw), Math.ceil(cw));
+        }
+    }
+
+    // Blocky bevel: light top/left, dark bottom/right
+    const e = Math.max(2, size * 0.09);
+    ctx2d.fillStyle = 'rgba(255,255,255,0.30)';
+    ctx2d.fillRect(ix, iy, s, e);
+    ctx2d.fillRect(ix, iy, e, s);
+    ctx2d.fillStyle = 'rgba(0,0,0,0.32)';
+    ctx2d.fillRect(ix, iy + s - e, s, e);
+    ctx2d.fillRect(ix + s - e, iy, e, s);
+
+    // Dark grid outline (Minecraft block edges)
+    ctx2d.strokeStyle = 'rgba(0,0,0,0.35)';
+    ctx2d.lineWidth = 1;
+    ctx2d.strokeRect(ix + 0.5, iy + 0.5, s - 1, s - 1);
+}
+
 // ─────────────────────────────────────────────
 // MAIN DRAW FUNCTION
 // ─────────────────────────────────────────────
@@ -450,11 +532,20 @@ function updateAndDrawParticles() {
     ctx.restore();
 }
 
+// Mark the canvas dirty so the next frame redraws (call after any board change).
+function requestRedraw() {
+    needsRedraw = true;
+}
+
 function gameLoop() {
-    // Only redraw while the game screen is on-screen — avoids burning frames
-    // drawing a hidden canvas on the menu / behind modals.
+    // Redraw only when on-screen AND something changed or an animation is live —
+    // a static board no longer burns 60fps of canvas work.
     if (gameScreen.classList.contains('active')) {
-        drawGame();
+        const animating = draggingShapeIndex !== -1 || particles.length > 0 || shakeTimer > 0;
+        if (needsRedraw || animating) {
+            drawGame();
+            needsRedraw = false;
+        }
     }
     requestAnimationFrame(gameLoop);
 }

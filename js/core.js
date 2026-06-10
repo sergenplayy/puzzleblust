@@ -8,6 +8,7 @@ function startGame(forceRestart = false) {
     isGameRunning = true;
     document.getElementById('combo-display').classList.remove('pop');
 
+    requestRedraw();
     fitBoard();
     refreshBgm();
 
@@ -154,9 +155,11 @@ function refillShapes() {
             baseY: panelY + 20
         });
     }
+    requestRedraw();
 }
 
 function updateScore() {
+    requestRedraw();
     scoreElement.textContent = formatScore(score);
     // Live high-score: reflect a new best immediately (don't wait for game-over)
     if (score > highScore) {
@@ -456,4 +459,5 @@ function createFlashElement(container, r, c) {
 function commitLineClears(rows, cols) {
     rows.forEach(r => { for (let c = 0; c < GRID_SIZE; c++) grid[r][c] = 0; });
     cols.forEach(c => { for (let r = 0; r < GRID_SIZE; r++) grid[r][c] = 0; });
+    requestRedraw();
 }

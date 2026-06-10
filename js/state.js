@@ -60,5 +60,9 @@ let shakeIntensity = 0;
 
 let loopStarted = false;
 
+// Render dirty-flag: the loop only redraws when this is set or an animation is
+// active (drag/particles/shake), instead of every frame while idle.
+let needsRedraw = true;
+
 // C2: one-step undo snapshot (null = nothing to undo)
 let undoState = null;
